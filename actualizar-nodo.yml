@@ -1,0 +1,28 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: "{{ nodo | default('etcd:k8s-cluster') }}"
+  gather_facts: no
+  environment: "{{ proxy_disable_env }}"
+  vars_prompt:
+    name: "confirmar_actualizar_nodo"
+    prompt: "¿Esta seguro de actualizar el nodo del cluster? Escriba 'si' para actualizar el nodo."
+    default: "no"
+    private: no
+
+  pre_tasks:
+    - name: comprobar la confirmación
+      fail:
+        msg: "No se pudo confirmar la actualizacion del nodo"
+      when: confirmar_actualizar_nodo != "si"
+
+- name: Actualizar nodo
+  hosts: "{{ nodo | default('kube-node') }}"
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: actualizar/pre-actualizar, tags: pre-actualizar, when: "fase == 'pre-actualizar'" }
+    - { role: actualizar/post-actualizar, tags: post-actualizar, when: "fase == 'post-actualizar'" }

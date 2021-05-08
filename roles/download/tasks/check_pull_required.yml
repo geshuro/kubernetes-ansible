@@ -1,0 +1,25 @@
+---
+- name: check_pull_required |  Genere una lista de información sobre las imágenes en un nodo
+  shell: "{{ image_info_command }}"
+  no_log: true
+  register: docker_images
+  failed_when: false
+  changed_when: false
+  check_mode: no
+  when: not download_always_pull
+
+- name: check_pull_required | Establecer pull_required si la imagen deseada aún no está cargada
+  set_fact:
+    pull_required: >-
+      {%- if image_reponame | regex_replace('^docker\.io/(library/)?','') in docker_images.stdout.split(',') %}false{%- else -%}true{%- endif -%}
+  when: not download_always_pull
+
+- name: check_pull_required | Comprobar que el resumen local sha256 corresponde a la etiqueta de imagen proporcionada
+  assert:
+    that: "{{ download.repo }}:{{ download.tag }} in docker_images.stdout.split(',')"
+  when:
+    - not download_always_pull
+    - not pull_required
+    - pull_by_digest
+  tags:
+    - asserts

@@ -1,0 +1,73 @@
+---
+- name: prep_kubeadm_images | Verificar que la versión de kubeadm coincida con la versión de Kubernetes
+  fail:
+    msg: "La versión de Kubeadm {{ kubeadm_version }} no coincide con kubernetes {{ kube_version }}"
+  when:
+    - not skip_downloads | default(false)
+    - not kubeadm_version == downloads.kubeadm.version
+
+- name: prep_kubeadm_images | Descargar kubeadm binary
+  include_tasks: "download_file.yml"
+  vars:
+    download: "{{ download_defaults | combine(downloads.kubeadm) }}"
+  when:
+    - not skip_downloads | default(false)
+    - downloads.kubeadm.enabled
+
+- name: prep_kubeadm_images | Crear configuración de kubeadm
+  template:
+    src: "kubeadm-images.yaml.j2"
+    dest: "{{ kube_config_dir }}/kubeadm-images.yaml"
+  when:
+    - not skip_kubeadm_images|default(false)
+
+- name: prep_kubeadm_images | Copiar el binario de kubeadm del directorio de descarga a la ruta del sistema
+  synchronize:
+    src: "{{ local_release_dir }}/kubeadm-{{ kubeadm_version }}-{{ image_arch }}"
+    dest: "{{ bin_dir }}/kubeadm"
+    compress: no
+    perms: yes
+    owner: no
+    group: no
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: prep_kubeadm_images | Establecer permisos al binario de kubeadm
+  file:
+    path: "{{ bin_dir }}/kubeadm"
+    mode: "0755"
+    state: file
+
+- name: prep_kubeadm_images | Generar lista de imágenes requeridas
+  shell: "set -o pipefail && {{ bin_dir }}/kubeadm config images list --config={{ kube_config_dir }}/kubeadm-images.yaml | grep -Ev 'coredns|pause'"
+  args:
+    executable: /bin/bash
+  register: kubeadm_images_raw
+  run_once: true
+  changed_when: false
+  when:
+    - not skip_kubeadm_images|default(false)
+
+- name: prep_kubeadm_images | Analizar lista de imágenes
+  vars:
+    kubeadm_images_list: "{{ kubeadm_images_raw.stdout_lines }}"
+  set_fact:
+    kubeadm_image:
+      key: "kubeadm_{{ (item | regex_replace('^(?:.*\\/)*','')).split(':')[0] }}"
+      value:
+        enabled: true
+        container: true
+        repo: "{{ item | regex_replace('^(.*):.*$','\\1') }}"
+        tag: "{{ item | regex_replace('^.*:(.*)$','\\1') }}"
+        groups: k8s-cluster
+  loop: "{{ kubeadm_images_list | flatten(levels=1) }}"
+  register: kubeadm_images_cooked
+  run_once: true
+  when:
+    - not skip_kubeadm_images|default(false)
+
+- name: prep_kubeadm_images | Convertir la lista de imágenes a dict para su uso posterior
+  set_fact:
+    kubeadm_images: "{{ kubeadm_images_cooked.results | map(attribute='ansible_facts.kubeadm_image') | list | items2dict }}"
+  run_once: true
+  when:
+    - not skip_kubeadm_images|default(false)

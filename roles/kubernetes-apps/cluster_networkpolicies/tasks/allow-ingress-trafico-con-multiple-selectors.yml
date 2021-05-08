@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Permitir el tráfico de una aplicacion mediante multiple selectores | Listar plantillas de politica ingress 
+  set_fact:
+    allow_ingress_trafico_con_multiple_selectors_templates:
+      - {file: allow-ingress-trafico-con-multiple-selectors.yaml, type: networkpolicy, name: allow-ingress-trafico-con-multiple-selectors}
+  when:
+  - networkpolicies.ingress.enabled|default(false)
+  - networkpolicies.ingress.allow_trafico_con_multiple_selectors_app.enabled|default(false)
+
+- name: "Kubernetes Apps | Permitir el tráfico de una aplicacion mediante multiple selectores | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_ingress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_con_multiple_selectors_app.enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Permitir el tráfico de una aplicacion mediante multiple selectores | Copiar plantilla network policies ingress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ allow_ingress_trafico_con_multiple_selectors_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_con_multiple_selectors_app.enabled|default(false)
+
+- name: Kubernetes Apps | Permitir el tráfico de una aplicacion mediante multiple selectores | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ networkpolicies.ingress.allow_trafico_con_multiple_selectors_app.namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_con_multiple_selectors_app.enabled|default(false)
+    - item.item.name == "allow-ingress-trafico-con-multiple-selectors"
+    - not item is skipped

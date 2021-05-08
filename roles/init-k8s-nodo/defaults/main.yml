@@ -1,0 +1,5 @@
+---
+init_k8s_nodo: false
+docker_montar: false
+subscription_username: user
+subscription_password: pass

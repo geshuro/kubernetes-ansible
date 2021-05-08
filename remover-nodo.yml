@@ -1,0 +1,47 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: "{{ nodo | default('etcd:k8s-cluster:calico-rr') }}"
+  gather_facts: no
+  environment: "{{ proxy_disable_env }}"
+  vars_prompt:
+    name: "confirmar_remover_nodo"
+    prompt: "¿Esta seguro de remover el nodo del cluster? Escriba 'si' para remover el nodo."
+    default: "no"
+    private: no
+
+  pre_tasks:
+    - name: comprobar la confirmación
+      fail:
+        msg: "No se pudo confirmar la exclusion del nodo"
+      when: confirmar_remover_nodo != "si"
+
+- name: Reunir datos
+  import_playbook: facts.yml
+
+- hosts: kube-master[0]
+  gather_facts: no
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bootstrap-os, tags: bootstrap-os }
+    - { role: remover-nodo/pre-remover, tags: pre-remover }
+
+- hosts: "{{ nodo | default('kube-node') }}"
+  gather_facts: no
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults, when: reset_nodes|default(True)|bool }
+    - { role: bootstrap-os, tags: bootstrap-os, when: reset_nodes|default(True)|bool }
+    - { role: remover-nodo/remover-nodo-etcd }
+    - { role: reset, tags: reset, when: reset_nodes|default(True)|bool }
+
+# Actualmente no se puede eliminar el primer nodo maestro o etcd
+- hosts: "{{ nodo | default('kube-master[1:]:etcd[1:]') }}"
+  gather_facts: no
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults, when: reset_nodes|default(True)|bool }
+    - { role: bootstrap-os, tags: bootstrap-os, when: reset_nodes|default(True)|bool }
+    - { role: remover-nodo/post-remover, tags: post-remover }

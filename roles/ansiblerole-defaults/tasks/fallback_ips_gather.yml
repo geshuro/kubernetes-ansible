@@ -1,0 +1,8 @@
+---
+- name: "Reunir ansible_default_ipv4 de {{ delegate_host_to_gather_facts }}"
+  setup:
+    gather_subset: '!all,network'
+    filter: "ansible_default_ipv4"
+  delegate_to: "{{ delegate_host_to_gather_facts }}"
+  connection: "{{ (delegate_host_to_gather_facts == 'localhost') | ternary('local', omit) }}"
+  delegate_facts: yes

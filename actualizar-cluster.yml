@@ -1,0 +1,158 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: bastion[0]
+  gather_facts: False
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"] }
+
+- hosts: k8s-cluster:etcd:calico-rr
+  strategy: linear
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  gather_facts: false
+  environment: "{{ proxy_disable_env }}"
+  vars:
+    ansible_ssh_pipelining: false
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bootstrap-os, tags: bootstrap-os}
+
+- name: Reunir datos
+  tags: always
+  import_playbook: facts.yml
+
+- name: Descargar imágenes al cache del host ansible a través del primer nodo kube-master
+  hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults, when: "not skip_downloads and download_run_once and not download_localhost"}
+    - { role: kubernetes/preinstall, tags: preinstall, when: "not skip_downloads and download_run_once and not download_localhost" }
+    - { role: download, tags: download, when: "not skip_downloads and download_run_once and not download_localhost" }
+
+- name: Preparar los nodos para la actualización
+  hosts: k8s-cluster:etcd:calico-rr
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes/preinstall, tags: preinstall }
+    - { role: download, tags: download, when: "not skip_downloads" }
+
+- name: Actualizar el container engine en nodos que no son del cluster
+  hosts: etcd:calico-rr:!k8s-cluster
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  serial: "{{ serial | default('20%') }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: container-engine, tags: "container-engine", when: deploy_container_engine|default(true) }
+
+- hosts: etcd
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - role: etcd
+      tags: etcd
+      vars:
+        etcd_cluster_setup: true
+        etcd_events_cluster_setup: false
+      when: not etcd_kubeadm_enabled | default(false)
+
+- hosts: k8s-cluster
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - role: etcd
+      tags: etcd
+      vars:
+        etcd_cluster_setup: false
+        etcd_events_cluster_setup: false
+      when: not etcd_kubeadm_enabled | default(false)
+
+- name: Maneje las actualizaciones de los componentes principales primero para mantener la compatibilidad con versiones anteriores.
+  gather_facts: False
+  hosts: kube-master
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  serial: 1
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: actualizar/pre-actualizar, tags: pre-actualizar }
+    - { role: container-engine, tags: "container-engine", when: deploy_container_engine|default(true) }
+    - { role: kubernetes/node, tags: node }
+    - { role: kubernetes/master, tags: master, upgrade_cluster_setup: true }
+    - { role: kubernetes/client, tags: client }
+    - { role: kubernetes/node-label, tags: node-label }
+    - { role: kubernetes-apps/cluster_roles, tags: cluster-roles }
+    - { role: kubernetes-apps, tags: csi-driver }
+    - { role: actualizar/post-actualizar, tags: post-actualizar }
+
+- name: Actualizar calico en todos los maestros, calico-rrs y nodos
+  hosts: kube-master:calico-rr:kube-node
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  serial: "{{ serial | default('20%') }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: network_plugin, tags: network }
+    - { role: kubernetes-apps/network_plugin, tags: network }
+    - { role: kubernetes-apps/policy_controller, tags: policy-controller }
+
+- name: Finalmente, manejar las actualizaciones de los worker, según batch size
+  hosts: kube-node:calico-rr:!kube-master
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  serial: "{{ serial | default('20%') }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: actualizar/pre-actualizar, tags: pre-actualizar }
+    - { role: container-engine, tags: "container-engine", when: deploy_container_engine|default(true) }
+    - { role: kubernetes/node, tags: node }
+    - { role: kubernetes/kubeadm, tags: kubeadm }
+    - { role: kubernetes/node-label, tags: node-label }
+    - { role: actualizar/post-actualizar, tags: post-actualizar }
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: true
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: win_nodes/kubernetes_patch, tags: ["master", "win_nodes"] }
+
+- hosts: calico-rr
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: network_plugin/calico/rr, tags: network }
+
+- hosts: kube-master
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes-apps, tags: apps }
+
+- hosts: k8s-cluster
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  environment: "{{ proxy_disable_env }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes/preinstall, when: "dns_mode != 'none' and resolvconf_mode == 'host_resolvconf'", tags: resolvconf }

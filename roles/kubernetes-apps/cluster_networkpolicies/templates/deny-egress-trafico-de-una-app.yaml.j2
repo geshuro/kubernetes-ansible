@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ networkpolicies.egress.deny_all_trafico_app.nombre }}
+spec:
+  podSelector:
+    matchLabels:
+      {{ networkpolicies.egress.deny_all_trafico_app.pod_matchlabels | to_nice_yaml(indent=2) | trim | indent(width=6) }}
+  policyTypes:
+  - Egress
+  egress:
+  # Permitir resolucion DNS
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP

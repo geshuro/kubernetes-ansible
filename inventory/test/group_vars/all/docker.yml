@@ -1,0 +1,37 @@
+---
+#docker_storage_options: -s overlay2
+## Habilitar docker_container_storage_setup, configurará el driver  devicemapper en Centos7 o RedHat7.
+docker_container_storage_setup: false
+
+docker_container_storage_setup_devs: /dev/xvdb
+
+
+docker_dns_servers_strict: false
+
+docker_container_storage_setup_data_size: 100%FREE
+docker_container_storage_setup_container_root_lv_size: 100%FREE
+# Ruta utilizada para almacenar datos de Docker
+docker_daemon_graph: "/var/lib/docker"
+
+## Se usa para establecer las opciones de docker daemon iptables en verdadero
+docker_iptables_enabled: "false"
+
+# Docker log options
+# Rotar logs de contenedor stderr/stdout a 50m y mantener los ultimos 5
+docker_log_opts: "--log-opt max-size=50m --log-opt max-file=5"
+
+# Definir docker bin_dir
+docker_bin_dir: "/usr/bin"
+
+# Mantener los Docker packages después de la instalación 
+# acelera las ejecuciones repetidas de aprovisionamiento ansible cuando esta en '1'
+docker_rpm_keepcache: 0
+
+## Una lista de registros de Docker inseguros (dirección IP o nombre de dominio), por ejemplo
+## para permitir el acceso de registro inseguro a registros self-hosted. Vacío por defecto.
+# docker_insecure_registries:
+#   - mirror.registry.io
+#   - 172.19.16.11
+docker_insecure_registries:
+  - jfcr.devops-internal.organizacion.int
+  - jfcr.organizacion.int

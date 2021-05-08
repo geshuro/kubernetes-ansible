@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Denegar todo el tráfico a una aplicación | Listar plantillas de politica ingress 
+  set_fact:
+    deny_ingress_all_app_templates:
+      - {file: deny-ingress-all-app.yaml, type: networkpolicy, name: deny-ingress-all-app}
+  when:
+  - networkpolicies.ingress.enabled|default(false)
+  - networkpolicies.ingress.deny_all_trafico.enabled|default(false)
+
+- name: "Kubernetes Apps | Denegar todo el tráfico a una aplicación | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_ingress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico.enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Denegar todo el tráfico a una aplicación | Copiar plantilla network policies ingress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ deny_ingress_all_app_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico.enabled|default(false)
+
+- name: Kubernetes Apps | Denegar todo el tráfico a una aplicación | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ networkpolicies.ingress.deny_all_trafico.namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico.enabled|default(false)
+    - item.item.name == "deny-ingress-all-app"
+    - not item is skipped

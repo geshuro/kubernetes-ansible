@@ -1,0 +1,11 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ networkpolicies.ingress.deny_all_trafico_otros_ns.namespace }}
+  name: "{{ networkpolicies.ingress.deny_all_trafico_otros_ns.namespace }}-deny-from-otros-ns"
+spec:
+  podSelector:
+    matchLabels:
+  ingress:
+  - from:
+    - podSelector: {}

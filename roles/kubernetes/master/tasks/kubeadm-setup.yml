@@ -1,0 +1,231 @@
+---
+- name: kubeadm | Comprobar si existe un antiguo certificado de apiserver en el host
+  stat:
+    path: "{{ kube_cert_dir }}/apiserver.pem"
+  register: old_apiserver_cert
+  delegate_to: "{{ groups['kube-master'] | first }}"
+  run_once: true
+
+- name: kubeadm | Migrar certificados antiguos si es necesario
+  import_tasks: kubeadm-migrate-certs.yml
+  when: old_apiserver_cert.stat.exists
+
+- name: Instalar certificado OIDC
+  copy:
+    content: "{{ kube_oidc_ca_cert | b64decode }}"
+    dest: "{{ kube_oidc_ca_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - kube_oidc_auth
+    - kube_oidc_ca_cert is defined
+
+- name: kubeadm | Verificar la clave de serviceaccount
+  stat:
+    path: "{{ kube_cert_dir }}/sa.key"
+  register: sa_key_before
+  run_once: true
+
+- name: kubeadm | Comprobar si kubeadm se ha ejecutado
+  stat:
+    path: "/var/lib/kubelet/config.yaml"
+  register: kubeadm_already_run
+
+- name: kubeadm | Eliminar antiguo admin.conf
+  file:
+    path: "{{ kube_config_dir }}/admin.conf"
+    state: absent
+  when:
+    - not kubeadm_already_run.stat.exists
+
+- name: kubeadm | Eliminar antiguo pods estatico
+  file:
+    path: "{{ kube_config_dir }}/manifests/{{ item }}.manifest"
+    state: absent
+  with_items: ["kube-apiserver", "kube-controller-manager", "kube-scheduler", "kube-proxy"]
+  when:
+    - old_apiserver_cert.stat.exists
+
+- name: kubeadm | Eliminar a la fuerza pods estáticos antiguos
+  shell: "set -o pipefail && docker ps -f name=k8s_{{ item }} -q | xargs --no-run-if-empty docker rm -f"
+  args:
+    executable: /bin/bash
+  with_items: ["kube-apiserver", "kube-controller-manager", "kube-scheduler"]
+  when:
+    - old_apiserver_cert.stat.exists
+
+- name: kubeadm | agregar todas las SANs
+  set_fact:
+    apiserver_sans: "{{ (sans_base + groups['kube-master'] + sans_lb + sans_lb_ip + sans_supp + sans_access_ip + sans_ip + sans_address + sans_override + sans_hostname + sans_fqdn) | unique }}"
+  vars:
+    sans_base:
+      - "kubernetes"
+      - "kubernetes.default"
+      - "kubernetes.default.svc"
+      - "kubernetes.default.svc.{{ dns_domain }}"
+      - "{{ kube_apiserver_ip }}"
+      - "localhost"
+      - "127.0.0.1"
+    sans_lb: "{{ [apiserver_loadbalancer_domain_name] if apiserver_loadbalancer_domain_name is defined else [] }}"
+    sans_lb_ip: "{{ [loadbalancer_apiserver.address] if loadbalancer_apiserver is defined and loadbalancer_apiserver.address is defined else [] }}"
+    sans_supp: "{{ supplementary_addresses_in_ssl_keys if supplementary_addresses_in_ssl_keys is defined else [] }}"
+    sans_access_ip: "{{ groups['kube-master'] | map('extract', hostvars, 'access_ip') | list | select('defined') | list }}"
+    sans_ip: "{{ groups['kube-master'] | map('extract', hostvars, 'ip') | list | select('defined') | list }}"
+    sans_address: "{{ groups['kube-master'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list | select('defined') | list }}"
+    sans_override: "{{ [kube_override_hostname] if kube_override_hostname else [] }}"
+    sans_hostname: "{{ groups['kube-master'] | map('extract', hostvars, ['ansible_hostname']) | list | select('defined') | list }}"
+    sans_fqdn: "{{ groups['kube-master'] | map('extract', hostvars, ['ansible_fqdn']) | list | select('defined') | list }}"
+  tags: facts
+
+- name: Crear directorio audit-policy
+  file:
+    path: "{{ audit_policy_file | dirname }}"
+    state: directory
+  when: kubernetes_audit|default(false) or kubernetes_audit_webhook|default(false)
+
+- name: Escribir política de auditoría de api yaml
+  template:
+    src: apiserver-audit-policy.yaml.j2
+    dest: "{{ audit_policy_file }}"
+  when: kubernetes_audit|default(false) or kubernetes_audit_webhook|default(false)
+
+- name: Escribir yaml de configuración de webhook de auditoría de API
+  template:
+    src: apiserver-audit-webhook-config.yaml.j2
+    dest: "{{ audit_webhook_config_file }}"
+  when: kubernetes_audit_webhook|default(false)
+
+# Nginx LB (predeterminado), si kubeadm_config_api_fqdn está definido, use otro LB por kubeadm controlPlaneEndpoint.
+- name: Establecer kubeadm_config_api_fqdn define
+  set_fact:
+    kubeadm_config_api_fqdn: "{{ apiserver_loadbalancer_domain_name|default('lb-apiserver.kubernetes.local') }}"
+  when: loadbalancer_apiserver is defined
+
+- name: kubeadm | Establecer la versión de kubeadm
+  import_tasks: kubeadm-version.yml
+
+- name: kubeadm | Gestionar certificados con kubeadm
+  import_tasks: kubeadm-certificate.yml
+  when:
+    - not upgrade_cluster_setup
+    - kubeadm_already_run.stat.exists
+
+- name: kubeadm | Comprobar si apiserver.crt contiene todas las SANs necesarias
+  command: openssl x509 -noout -in "{{ kube_cert_dir }}/apiserver.crt" -check{{ item|ipaddr|ternary('ip','host') }} "{{ item }}"
+  with_items: "{{ apiserver_sans }}"
+  register: apiserver_sans_check
+  changed_when: "'does match certificate' not in apiserver_sans_check.stdout"
+  when:
+    - inventory_hostname == groups['kube-master']|first
+    - kubeadm_already_run.stat.exists
+
+- name: kubeadm | Regenerar apiserver cert 1/2
+  file:
+    state: absent
+    path: "{{ kube_cert_dir }}/{{ item }}"
+  with_items:
+    - apiserver.crt
+    - apiserver.key
+  when:
+    - inventory_hostname == groups['kube-master']|first
+    - kubeadm_already_run.stat.exists
+    - apiserver_sans_check.changed or force_certificate_regeneration
+
+- name: kubeadm | Regenerar apiserver cert 2/2
+  command: >-
+    {{ bin_dir }}/kubeadm
+    init phase certs apiserver
+    --config={{ kube_config_dir }}/kubeadm-config.yaml
+  when:
+    - inventory_hostname == groups['kube-master']|first
+    - kubeadm_already_run.stat.exists
+    - apiserver_sans_check.changed or force_certificate_regeneration
+
+- name: kubeadm | Inicializar primer maestro
+  command: >-
+    timeout -k 300s 300s
+    {{ bin_dir }}/kubeadm init
+    --config={{ kube_config_dir }}/kubeadm-config.yaml
+    --ignore-preflight-errors=all
+    --skip-phases={{ kubeadm_init_phases_skip | join(',') }}
+    --upload-certs
+  register: kubeadm_init
+  # El reintento se debe a que la configuración de carga a veces falla
+  retries: 3
+  until: kubeadm_init is succeeded or "field is immutable" in kubeadm_init.stderr
+  when: inventory_hostname == groups['kube-master']|first and not kubeadm_already_run.stat.exists
+  failed_when: kubeadm_init.rc != 0 and "field is immutable" not in kubeadm_init.stderr
+  environment:
+    PATH: "{{ bin_dir }}:{{ ansible_env.PATH }}"
+  notify: Master | restart kubelet
+
+- name: Establecer clave de certificado kubeadm
+  set_fact:
+    kubeadm_certificate_key: "{{ item | regex_search('--certificate-key ([^ ]+)','\\1') | first }}"
+  with_items: "{{ hostvars[groups['kube-master'][0]]['kubeadm_init'].stdout_lines | default([]) }}"
+  when:
+    - kubeadm_certificate_key is not defined
+    - (item | trim) is match('.*--certificate-key.*')
+
+- name: Crear un token kubeadm codificado para unir nodos con vencimiento de 24 horas (si está definido)
+  shell: >-
+    {{ bin_dir }}/kubeadm --kubeconfig /etc/kubernetes/admin.conf token delete {{ kubeadm_token }} || :;
+    {{ bin_dir }}/kubeadm --kubeconfig /etc/kubernetes/admin.conf token create {{ kubeadm_token }}
+  changed_when: false
+  when:
+    - inventory_hostname == groups['kube-master']|first
+    - kubeadm_token is defined
+    - kubeadm_refresh_token
+  tags:
+    - kubeadm_token
+
+- name: Crear token kubeadm para unir nodos con vencimiento de 24 horas (predeterminado)
+  command: "{{ bin_dir }}/kubeadm --kubeconfig /etc/kubernetes/admin.conf token create"
+  changed_when: false
+  register: temp_token
+  retries: 5
+  delay: 5
+  until: temp_token is succeeded
+  delegate_to: "{{ groups['kube-master'] | first }}"
+  when: kubeadm_token is not defined
+  tags:
+    - kubeadm_token
+
+- name: Establecer kubeadm_token
+  set_fact:
+    kubeadm_token: "{{ temp_token.stdout }}"
+  when: temp_token.stdout is defined
+  tags:
+    - kubeadm_token
+
+- name: kubeadm | Unir a otros maestros
+  include_tasks: kubeadm-secondary.yml
+
+- name: kubeadm | Actualizar el clúster de Kubernetes
+  include_tasks: kubeadm-upgrade.yml
+  when:
+    - upgrade_cluster_setup
+    - kubeadm_already_run.stat.exists
+
+- name: kubeadm | Verificar la clave de la cuenta de serviceaccount
+  stat:
+    path: "{{ kube_cert_dir }}/sa.key"
+  register: sa_key_after
+  run_once: true
+
+- name: kubeadm | Establecer secret_changed si se actualizó la clave de la cuenta de servicio
+  command: /bin/true
+  notify: Master | Establecer secret_changed
+  when: sa_key_before.stat.checksum|default("") != sa_key_after.stat.checksum
+
+- name: kubeadm | Limpiar certificados antiguos si es necesario
+  import_tasks: kubeadm-cleanup-old-certs.yml
+  when:
+    - old_apiserver_cert.stat.exists
+
+- name: kubeadm | Eliminar taint para maestro con rol de nodo
+  command: "{{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf taint node {{ inventory_hostname }} node-role.kubernetes.io/master:NoSchedule-"
+  delegate_to: "{{ groups['kube-master'] | first }}"
+  when: inventory_hostname in groups['kube-node']
+  failed_when: false

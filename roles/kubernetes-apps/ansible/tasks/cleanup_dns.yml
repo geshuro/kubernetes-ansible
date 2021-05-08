@@ -1,0 +1,22 @@
+---
+- name: Kubernetes Apps | Eliminar kubeadm CoreDNS
+  kube:
+    name: "coredns"
+    namespace: "kube-system"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "deploy"
+    state: absent
+  when:
+    - dns_mode in ['coredns', 'coredns_dual']
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Eliminar servicio kubeadm Kube-DNS
+  kube:
+    name: "kube-dns"
+    namespace: "kube-system"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "svc"
+    state: absent
+  when:
+    - dns_mode in ['coredns', 'coredns_dual']
+    - inventory_hostname == groups['kube-master'][0]

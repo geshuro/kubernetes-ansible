@@ -1,0 +1,169 @@
+---
+- name: Establecer kubeadm_discovery_address
+  set_fact:
+    kubeadm_discovery_address: >-
+      {%- if "127.0.0.1" in kube_apiserver_endpoint or "localhost" in kube_apiserver_endpoint -%}
+      {{ first_kube_master }}:{{ kube_apiserver_port }}
+      {%- else -%}
+      {{ kube_apiserver_endpoint | replace("https://", "") }}
+      {%- endif %}
+  tags:
+    - facts
+
+- name: Comprobar si existe kubelet.conf
+  stat:
+    path: "{{ kube_config_dir }}/kubelet.conf"
+  register: kubelet_conf
+
+- name: Comprobar si se puede acceder al certificado de kubeadm CA
+  stat:
+    path: "{{ kube_cert_dir }}/ca.crt"
+  register: kubeadm_ca_stat
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  run_once: true
+
+- name: Calcular el hash del certificado de CA de kubeadm
+  shell: set -o pipefail && openssl x509 -pubkey -in {{ kube_cert_dir }}/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+  args:
+    executable: /bin/bash
+  register: kubeadm_ca_hash
+  when:
+    - kubeadm_ca_stat.stat is defined
+    - kubeadm_ca_stat.stat.exists
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  run_once: true
+  changed_when: false
+
+- name: Crear token kubeadm para unirse a nodos con vencimiento de 24 horas (default)
+  command: "{{ bin_dir }}/kubeadm token create"
+  register: temp_token
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  when: kubeadm_token is not defined
+  changed_when: false
+
+- name: Establecer kubeadm_token en token generado
+  set_fact:
+    kubeadm_token: "{{ temp_token.stdout }}"
+  when: kubeadm_token is not defined
+
+- name: Obtener la versión de kubeadm
+  command: "{{ bin_dir }}/kubeadm version -o short"
+  register: kubeadm_output
+  changed_when: false
+
+- name: Establecer la api version de kubeadm en v1beta2
+  set_fact:
+    kubeadmConfig_api_version: v1beta2
+
+- name: Crear la configuración del cliente de kubeadm
+  template:
+    src: "kubeadm-client.conf.{{ kubeadmConfig_api_version }}.j2"
+    dest: "{{ kube_config_dir }}/kubeadm-client.conf"
+    backup: yes
+  when: not is_kube_master
+
+- name: Unir al clúster si es necesario
+  environment:
+    PATH: "{{ bin_dir }}:{{ ansible_env.PATH }}:/sbin"
+  when: not is_kube_master and (not kubelet_conf.stat.exists)
+  block:
+
+    - name: Unirse al clúster
+      command: >-
+        timeout -k {{ kubeadm_join_timeout }} {{ kubeadm_join_timeout }}
+        {{ bin_dir }}/kubeadm join
+        --config {{ kube_config_dir }}/kubeadm-client.conf
+        --ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests
+      register: kubeadm_join
+
+  rescue:
+
+    - name: Unirse al clúster con ignorados
+      command: >-
+        timeout -k {{ kubeadm_join_timeout }} {{ kubeadm_join_timeout }}
+        {{ bin_dir }}/kubeadm join
+        --config {{ kube_config_dir }}/kubeadm-client.conf
+        --ignore-preflight-errors=all
+      register: kubeadm_join
+
+  always:
+
+    - name: Mostrar kubeadm join stderr si lo hay
+      when: kubeadm_join is failed
+      debug:
+        msg: |
+          Unido con advertencias
+          {{ kubeadm_join.stderr_lines }}
+
+- name: Actualizar el campo del servidor en kubelet kubeconfig
+  lineinfile:
+    dest: "{{ kube_config_dir }}/kubelet.conf"
+    regexp: 'server:'
+    line: '    server: {{ kube_apiserver_endpoint }}'
+    backup: yes
+  when:
+    - kubeadm_config_api_fqdn is not defined
+    - not is_kube_master
+    - kubeadm_discovery_address != kube_apiserver_endpoint | replace("https://", "")
+  notify: Kubeadm | restart kubelet
+
+- name: Actualizar el campo del servidor en kube-proxy kubeconfig
+  shell: >-
+    set -o pipefail && {{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf get configmap kube-proxy -n kube-system -o yaml
+    | sed 's#server:.*#server: https://127.0.0.1:{{ kube_apiserver_port }}#g'
+    | {{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf replace -f -
+  args:
+    executable: /bin/bash
+  run_once: true
+  delegate_to: "{{ groups['kube-master']|first }}"
+  delegate_facts: false
+  when:
+    - inventory_hostname in groups['kube-master']
+    - kubeadm_config_api_fqdn is not defined
+    - kubeadm_discovery_address != kube_apiserver_endpoint | replace("https://", "")
+    - kube_proxy_deployed
+    - loadbalancer_apiserver_localhost
+  tags:
+    - kube-proxy
+
+- name: Establecer permiso de archivo ca.crt
+  file:
+    path: "{{ kube_cert_dir }}/ca.crt"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "Actualizar imagen compatible de kube-proxy {{ kube_proxy_image_tag }} "
+  command: "{{ bin_dir }}/kubectl -n kube-system set image daemonset/kube-proxy *=k8s.gcr.io/kube-proxy:{{ kube_proxy_image_tag }}"
+  run_once: true
+  delegate_to: "{{ groups['kube-master']|first }}"
+  delegate_facts: false
+  when:
+    - kube_proxy_compatible
+    - inventory_hostname in groups['kube-master']
+    - kubeadm_config_api_fqdn is not defined
+    - kubeadm_discovery_address != kube_apiserver_endpoint | replace("https://", "")
+    - kube_proxy_deployed
+  tags:
+    - kube-proxy
+
+- name: Reiniciar todos los pods de kube-proxy para asegurarse de que cargan el nuevo configmap
+  command: "{{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf delete pod -n kube-system -l k8s-app=kube-proxy --force --grace-period=0"
+  run_once: true
+  delegate_to: "{{ groups['kube-master']|first }}"
+  delegate_facts: false
+  when:
+    - inventory_hostname in groups['kube-master']
+    - kubeadm_config_api_fqdn is not defined
+    - kubeadm_discovery_address != kube_apiserver_endpoint | replace("https://", "")
+    - kube_proxy_deployed
+  tags:
+    - kube-proxy
+
+- name: Extraer certificados etcd del control plane si usa el modo etcd kubeadm
+  include_tasks: kubeadm_etcd_node.yml
+  when:
+    - etcd_kubeadm_enabled
+    - inventory_hostname not in groups['kube-master']
+    - kube_network_plugin in ["calico", "flannel", "canal", "cilium"] or cilium_deploy_additionally | default(false) | bool
+    - kube_network_plugin != "calico" or calico_datastore == "etcd"

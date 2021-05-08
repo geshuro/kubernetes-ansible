@@ -1,0 +1,15 @@
+---
+# discovery_timeout modifica el tiempo de espera de descubrimiento
+# Este valor debe ser menor que kubeadm_join_timeout
+discovery_timeout: 60s
+kubeadm_join_timeout: 120s
+
+# Si no está vacío, utilizará esta cadena como identificación en lugar del hostname actual
+kube_override_hostname: >-
+  {{ inventory_hostname }}
+
+# Solicita una nueva carga de certificados del primer maestro
+kubeadm_etcd_refresh_cert_key: true
+
+# Modo de implementación experimental de kubeadm etcd. Disponible solo para nuevas implementaciones
+etcd_kubeadm_enabled: false

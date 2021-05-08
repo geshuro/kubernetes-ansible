@@ -1,0 +1,98 @@
+---
+# Permitir la conectividad a Internet desde contenedores
+nat_outgoing: true
+
+# Agregar el nombre de ippool predeterminado
+calico_pool_name: "default-pool"
+calico_ipv4pool_ipip: "Off"
+
+# Usar la encapsulacion IP-over-IP en todos los hosts
+ipip: true
+ipip_mode: "{{ 'Always' if ipip else 'Never' }}"  # cambiar a "CrossSubnet" si desea la encapsulación ipip en el tráfico que atraviesa subredes
+calico_ipip_mode: "{{ ipip_mode }}"
+calico_vxlan_mode: 'Never'
+
+calico_cert_dir: /etc/calico/certs
+
+# Global as_num (/calico/bgp/v1/global/as_num)
+global_as_num: "64512"
+
+# Puede establecer el valor de MTU aquí. Si se deja sin definir o vacío, 
+# no se especificará en la configuración CNI de calico, por lo que Calico 
+# usará los valores predeterminados incorporados.
+# El valor debe ser un número, no una cadena.
+# calico_mtu: 1500
+
+# Límites para aplicaciones
+calico_node_memory_limit: 500M
+calico_node_cpu_limit: 300m
+calico_node_memory_requests: 64M
+calico_node_cpu_requests: 150m
+calico_felix_chaininsertmode: Insert
+
+# EL ID Virtual network se utiliza para el trafico VXLAN. El valor 0 significa "usar el kernel predeterminado".
+calico_vxlan_vni: 4096
+
+# Puerto usado par el trafico VXLAN. El valor 0 significa "usar el kernel predeterminado".
+calico_vxlan_port: 4789
+
+# Habilitar endpoint Prometheus Metrics para felix 
+calico_felix_prometheusmetricsenabled: false
+calico_felix_prometheusmetricsport: 9091
+calico_felix_prometheusgometricsenabled: true
+calico_felix_prometheusprocessmetricsenabled: true
+
+calico_upgrade_enabled: true
+calico_upgrade_version: v1.0.5
+calico_upgrade_url: "https://github.com/projectcalico/calico-upgrade/releases/download/{{ calico_upgrade_version }}/calico-upgrade"
+
+# Establecer el log level del agente. Puede ser debug, warning, info o fatal
+calico_loglevel: info
+
+# Habilitar o deshabilitar el informe de uso en 'usage.projectcalico.org'
+calico_usage_reporting: false
+
+# Ignorar la configuración de verificación RPF del kernel
+calico_node_ignorelooserpf: false
+
+# Definir la dirección en la que Felix responderá a las solicitudes de health.
+calico_healthhost: "localhost"
+
+# Configurar el tiempo en segundos que calico esperará para el bloqueo de iptables
+calico_iptables_lock_timeout_secs: 10
+
+# Elegir el backend de iptables de Calico: "Legacy", "Auto" o "NFT" (FELIX_IPTABLESBACKEND)
+calico_iptables_backend: "Legacy"
+
+# Si desea utilizar IP_AUTODETECTION_METHOD no predeterminado para el nodo calico, establezca esta opción en una de las siguientes opciones:
+# * can-reach=DESTINATION
+# * interface=INTERFACE-REGEX
+# Mirar https://docs.projectcalico.org/v3.0/reference/node/configuration#ip-autodetection-methods
+# calico_ip_auto_method: "interface=eth.*"
+
+calico_baremetal_nodename: "{{ kube_override_hostname | default(inventory_hostname) }}"
+
+### No habilitar esto, esto se detecta en el alcance de las tareas, esto es solo un valor predeterminado
+calico_upgrade_needed: false
+
+kube_etcd_cacert_file: ca.pem
+kube_etcd_cert_file: node-{{ inventory_hostname }}.pem
+kube_etcd_key_file: node-{{ inventory_hostname }}-key.pem
+
+# Elegir el tipo de almacén de datos para calico: "etcd" o "kdd" (kubernetes datastore)
+# El valor predeterminado para calico_datastore se establece en el rol ansiblerole-default o k8s-net-calico.yml
+
+# Usar typha (solo con kdd)
+typha_enabled: false
+
+# Tipo de escala: 1 réplica por 100 nodos es adecuada
+# Número de réplicas de Typha
+typha_replicas: 1
+
+# Establecer conexiones máximas de Typha
+typha_max_connections_lower_limit: 300
+
+# Generar certificados TLS para la comunicación typha <-> calico-node
+typha_secure: false
+
+calico_feature_control: {}

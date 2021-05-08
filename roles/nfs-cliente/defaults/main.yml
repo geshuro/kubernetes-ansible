@@ -1,0 +1,7 @@
+---
+nfs_cliente: false
+nfs_cliente_tools: false
+nfs_cliente_disk1: false
+dir_tools: "/shared/tools"
+dir_disk1: "/shared/disk1"
+ip_nfs_server: 172.28.12.240

@@ -1,0 +1,46 @@
+---
+- name: Probar si el apiserver correcto está configurado en todos los kubeconfigs
+  shell: >-
+    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/admin.conf &&
+    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/controller-manager.conf &&
+    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/kubelet.conf &&
+    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/scheduler.conf
+  register: kubeconfig_correct_apiserver
+  changed_when: False
+  failed_when: False
+
+- name: Crear directorio temporal
+  tempfile:
+    state: directory
+  register: kubeconfig_temp_dir
+  when: kubeconfig_correct_apiserver.rc != 0
+
+- name: Generar nuevos kubeconfigs con apiserver correcto
+  command: >-
+    {{ bin_dir }}/kubeadm init phase kubeconfig all
+    --config {{ kube_config_dir }}/kubeadm-config.yaml
+    --kubeconfig-dir {{ kubeconfig_temp_dir.path }}
+  when: kubeconfig_correct_apiserver.rc != 0
+
+- name: Copiar nuevos kubeconfigs en el directorio de configuración de kube
+  copy:
+    src: "{{ kubeconfig_temp_dir.path }}/{{ item }}"
+    dest: "{{ kube_config_dir }}/{{ item }}"
+    mode: 0640
+    remote_src: yes
+  when: kubeconfig_correct_apiserver.rc != 0
+  with_items:
+    - admin.conf
+    - controller-manager.conf
+    - kubelet.conf
+    - scheduler.conf
+  notify:
+    - "Master | Restart kube-controller-manager"
+    - "Master | Restart kube-scheduler"
+    - "Master | reload kubelet"
+
+- name: Limpiar directorio temporal
+  file:
+    path: "{{ kubeconfig_temp_dir.path }}"
+    state: absent
+  when: kubeconfig_correct_apiserver.rc != 0

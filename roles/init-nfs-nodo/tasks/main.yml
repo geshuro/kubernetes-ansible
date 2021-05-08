@@ -1,0 +1,9 @@
+---
+
+- import_tasks: 0010-nfs-server-montar.yml
+  when:
+    - init_nfs_nodo
+
+- import_tasks: 0020-nfs-server-service.yml
+  when:
+    - init_nfs_nodo

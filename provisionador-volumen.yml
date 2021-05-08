@@ -1,0 +1,96 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: "Configurar variable entorno de proxy"
+      set_fact:
+        proxy_env:
+          http_proxy: "{{ http_proxy | default ('') }}"
+          HTTP_PROXY: "{{ http_proxy | default ('') }}"
+          https_proxy: "{{ https_proxy | default ('') }}"
+          HTTPS_PROXY: "{{ https_proxy | default ('') }}"
+          no_proxy: "{{ no_proxy | default ('') }}"
+          NO_PROXY: "{{ no_proxy | default ('') }}"
+      no_log: true
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"] }
+
+- name: Reunir datos
+  tags: always
+  import_playbook: facts.yml
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - role: kubernetes-apps/external_provisioner
+      tags: external-provisioner
+      vars:
+        local_path_provisioner_enabled: true
+        local_path_provisioner_namespace: "local-path-storage-tools"
+        local_path_provisioner_storage_class: "local-path-tools"
+        local_path_provisioner_reclaim_policy: Delete
+        local_path_provisioner_claim_root: /shared/tools
+        local_path_provisioner_is_default_storageclass: false
+        local_path_provisioner_debug: false
+        local_path_provisioner_helper_image_tag: "latest"
+        local_path_provisioner_psp: "{{ local_path_provisioner_namespace }}"
+        local_path_provisioner_crb: "{{ local_path_provisioner_namespace }}-bind"
+        local_path_provisioner_image_repo: "rancher/local-path-provisioner"
+        local_path_provisioner_image_tag: "v0.0.19"
+        apparmor_enabled: false
+        k8s_image_pull_policy: IfNotPresent
+        nodo_role: "node-role.kubernetes.io/node-tools"
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: "{{ nodo_role }}"
+                  operator: In
+                  values:
+                  - ""
+  environment: "{{ proxy_env }}"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - role: kubernetes-apps/external_provisioner
+      tags: external-provisioner
+      vars:
+        local_path_provisioner_enabled: true
+        local_path_provisioner_namespace: "local-path-storage-micro"
+        local_path_provisioner_storage_class: "local-path-micro"
+        local_path_provisioner_reclaim_policy: Delete
+        local_path_provisioner_claim_root: /shared/disk1
+        local_path_provisioner_is_default_storageclass: false
+        local_path_provisioner_debug: false
+        local_path_provisioner_helper_image_tag: "latest"
+        local_path_provisioner_psp: "{{ local_path_provisioner_namespace }}"
+        local_path_provisioner_crb: "{{ local_path_provisioner_namespace }}-bind"
+        local_path_provisioner_image_repo: "rancher/local-path-provisioner"
+        local_path_provisioner_image_tag: "v0.0.19"
+        apparmor_enabled: false
+        k8s_image_pull_policy: IfNotPresent
+        nodo_role: "node-role.kubernetes.io/node-micro"
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: "{{ nodo_role }}"
+                  operator: In
+                  values:
+                  - ""
+  environment: "{{ proxy_env }}"

@@ -1,0 +1,240 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: "Configurar variable entorno de proxy"
+      set_fact:
+        proxy_env:
+          http_proxy: "{{ http_proxy | default ('') }}"
+          HTTP_PROXY: "{{ http_proxy | default ('') }}"
+          https_proxy: "{{ https_proxy | default ('') }}"
+          HTTPS_PROXY: "{{ https_proxy | default ('') }}"
+          no_proxy: "{{ no_proxy | default ('') }}"
+          NO_PROXY: "{{ no_proxy | default ('') }}"
+      no_log: true
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"] }
+
+#Devops - inicio
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }                
+        autorizar_namespace: devops-ns
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }
+        autorizar_namespace: ingress-lan
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }
+        autorizar_namespace: monitoring
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }
+        autorizar_namespace: logging
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }
+        autorizar_namespace: cluster-tools 
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_devops }}"
+        certificados:
+          - { usuario_ssl: devops-admin, grupo_usr_ssl: devops, cant_dias_ssl: 100 }
+        autorizar_namespace: tools-devops
+        autorizar_grupo_usr: devops
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+#Devops - fin
+
+#Cloud - inicio
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_cloud }}"
+        certificados:
+          - { usuario_ssl: cloud-admin, grupo_usr_ssl: cloud, cant_dias_ssl: 100 }
+        autorizar_namespace: cloud-ns
+        autorizar_grupo_usr: cloud
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_cloud }}"
+        certificados:
+          - { usuario_ssl: cloud-admin, grupo_usr_ssl: cloud, cant_dias_ssl: 100 }
+        autorizar_namespace: tools-cloud
+        autorizar_grupo_usr: cloud
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_cloud }}"
+        certificados:
+          - { usuario_ssl: cloud-admin, grupo_usr_ssl: cloud, cant_dias_ssl: 100 }
+        autorizar_namespace: istio-system
+        autorizar_grupo_usr: cloud
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_cloud }}"
+        certificados:
+          - { usuario_ssl: cloud-admin, grupo_usr_ssl: cloud, cant_dias_ssl: 100 }
+        autorizar_namespace: ingress-lan
+        autorizar_grupo_usr: cloud
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+#Cloud - fin
+
+#Develop - inicio
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_develop }}"
+        certificados:
+          - { usuario_ssl: develop-admin, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+          - { usuario_ssl: aspaucara, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+        autorizar_namespace: microfrontends 
+        autorizar_grupo_usr: develop
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_develop }}"
+        certificados:
+          - { usuario_ssl: develop-admin, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+          - { usuario_ssl: aspaucara, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+        autorizar_namespace: microservicios
+        autorizar_grupo_usr: develop
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"
+#Develop - fin      
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_usuarios
+      tags: cluster_usuarios 
+      vars:
+        gen_certs: true
+        ruta_exportar_cert: "{{ dir_cert_develop }}"
+        certificados:
+          - { usuario_ssl: develop-admin, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+          - { usuario_ssl: aspaucara, grupo_usr_ssl: develop, cant_dias_ssl: 100 }
+        autorizar_namespace: cloud-ns
+        autorizar_grupo_usr: develop
+        podsecuritypolicy_enabled: true
+      when: "gen_certs|default(false)"

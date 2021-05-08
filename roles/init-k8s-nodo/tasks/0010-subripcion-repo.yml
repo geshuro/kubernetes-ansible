@@ -1,0 +1,13 @@
+---
+
+- name: Subscribir usuario al nodo
+  redhat_subscription:
+    state: present
+    username: "{{ subscription_username }}"
+    password: "{{ subscription_password }}"
+    auto_attach: true
+
+- name: Habilitar repositorio rhel-7-server-ansible-2.9-rpms
+  rhsm_repository:
+    name: rhel-7-server-ansible-2.9-rpms
+    state: enabled

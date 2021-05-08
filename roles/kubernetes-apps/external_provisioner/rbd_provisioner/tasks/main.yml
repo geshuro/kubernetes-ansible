@@ -1,0 +1,79 @@
+---
+
+- name: Proveedor RBD | Eliminar el directorio y los manifiestos de complementos heredados
+  file:
+    path: "{{ kube_config_dir }}/addons/rbd_provisioner"
+    state: absent
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+  tags:
+    - upgrade
+
+- name: Proveedor RBD | Eliminar namespace legacy
+  shell: |
+    {{ bin_dir }}/kubectl delete namespace {{ rbd_provisioner_namespace }}
+  ignore_errors: yes
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+  tags:
+    - upgrade
+
+- name: Proveedor RBD | Eliminar storageclass legacy
+  shell: |
+    {{ bin_dir }}/kubectl delete storageclass {{ rbd_provisioner_storage_class }}
+  ignore_errors: yes
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+  tags:
+    - upgrade
+
+- name: Proveedor RBD | Crear directorio de complementos
+  file:
+    path: "{{ kube_config_dir }}/addons/rbd_provisioner"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Proveedor RBD | Listar plantillas
+  set_fact:
+    rbd_provisioner_templates:
+      - { name: 00-namespace, file: 00-namespace.yml, type: ns }
+      - { name: secret-rbd-provisioner, file: secret-rbd-provisioner.yml, type: secret }
+      - { name: sa-rbd-provisioner, file: sa-rbd-provisioner.yml, type: sa }
+      - { name: clusterrole-rbd-provisioner, file: clusterrole-rbd-provisioner.yml, type: clusterrole }
+      - { name: clusterrolebinding-rbd-provisioner, file: clusterrolebinding-rbd-provisioner.yml, type: clusterrolebinding }
+      - { name: role-rbd-provisioner, file: role-rbd-provisioner.yml, type: role }
+      - { name: rolebinding-rbd-provisioner, file: rolebinding-rbd-provisioner.yml, type: rolebinding }
+      - { name: deploy-rbd-provisioner, file: deploy-rbd-provisioner.yml, type: deploy }
+      - { name: sc-rbd-provisioner, file: sc-rbd-provisioner.yml, type: sc }
+    rbd_provisioner_templates_for_psp:
+      - { name: psp-rbd-provisioner, file: psp-rbd-provisioner.yml, type: psp }
+
+- name: Proveedor RBD | Agregar plantillas adicionales a la lista de plantillas de Proveedor RBD para PodSecurityPolicy
+  set_fact:
+    rbd_provisioner_templates: "{{ rbd_provisioner_templates_for_psp + rbd_provisioner_templates }}"
+  when:
+    - podsecuritypolicy_enabled
+    - rbd_provisioner_namespace != "kube-system"
+
+- name: Proveedor RBD | Crear manifiestos
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ kube_config_dir }}/addons/rbd_provisioner/{{ item.file }}"
+  with_items: "{{ rbd_provisioner_templates }}"
+  register: rbd_provisioner_manifests
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Proveedor RBD | Aplicar manifiestos
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ rbd_provisioner_namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ kube_config_dir }}/addons/rbd_provisioner/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ rbd_provisioner_manifests.results }}"
+  when: inventory_hostname == groups['kube-master'][0]

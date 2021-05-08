@@ -1,0 +1,37 @@
+---
+- block:
+  - name: Establecer el recuento de reintentos
+    set_fact:
+      retry_count: "{{ 0 if retry_count is undefined else retry_count|int + 1 }}"
+
+  - name: Calico-rr | Obtener el objeto de nodo actual
+    command: "{{ bin_dir }}/calicoctl.sh get node {{ inventory_hostname }} -ojson"
+    changed_when: false
+    register: calico_rr_node
+    until: calico_rr_node is succeeded
+    delay: "{{ retry_stagger | random + 3 }}"
+    retries: 10
+
+  - name: Calico-rr | Establecer cluster ID a route reflector 
+    set_fact:
+      calico_rr_node_patched: >-
+        {{ calico_rr_node.stdout | from_json | combine({ 'spec': { 'bgp':
+        { 'routeReflectorClusterID': cluster_id }}}, recursive=True) }}
+
+  - name: Calico-rr | Configurar route reflector
+    shell: "{{ bin_dir }}/calicoctl.sh replace -f-"
+    args:
+      stdin: "{{ calico_rr_node_patched | to_json }}"
+
+  rescue:
+  - name: Fallar si se alcanza el límite de reintentos
+    fail:
+      msg: Finalizar después de 10 reintentos
+    when: retry_count|int == 10
+
+  - name: Reintentar la configuración del nodo
+    debug:
+      msg: "No se pudo configurar el route reflector - Volviendo a intentar..."
+
+  - name: Reintentar la configuración del nodo
+    include_tasks: update-node.yml

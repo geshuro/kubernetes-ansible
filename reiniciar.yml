@@ -1,0 +1,45 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: "Configurar variable entorno de proxy"
+      set_fact:
+        proxy_env:
+          http_proxy: "{{ http_proxy | default ('') }}"
+          HTTP_PROXY: "{{ http_proxy | default ('') }}"
+          https_proxy: "{{ https_proxy | default ('') }}"
+          HTTPS_PROXY: "{{ https_proxy | default ('') }}"
+          no_proxy: "{{ no_proxy | default ('') }}"
+          NO_PROXY: "{{ no_proxy | default ('') }}"
+      no_log: true
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: ansiblerole-defaults}
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"]}
+
+- name: Reunir datos
+  import_playbook: facts.yml
+
+- hosts: etcd:k8s-cluster
+  gather_facts: False
+  vars_prompt:
+    name: "confirmar_reinicio"
+    prompt: "¿Estas seguro de restablecer al cluster? Escriba 'si' para restablecer el cluster."
+    default: "no"
+    private: no
+
+  pre_tasks:
+    - name: comprobar la confirmación
+      fail:
+        msg: "El restablecimiento del cluster fue abortado"
+      when: confirmar_reinicio != "si"
+
+  roles:
+    - { role: ansiblerole-defaults}
+    - { role: reset, tags: reset }

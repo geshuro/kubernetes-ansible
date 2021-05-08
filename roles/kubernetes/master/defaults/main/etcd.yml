@@ -1,0 +1,27 @@
+---
+#Nota: esto no configura las entradas de DNS. 
+#Simplemente agrega las siguientes entradas DNS al certificado
+etcd_cert_alt_names:
+  - "etcd.kube-system.svc.{{ dns_domain }}"
+  - "etcd.kube-system.svc"
+  - "etcd.kube-system"
+  - "etcd"
+etcd_cert_alt_ips: []
+
+etcd_heartbeat_interval: "250"
+etcd_election_timeout: "5000"
+
+# etcd_snapshot_count: "10000"
+
+etcd_metrics: "basic"
+
+## Un diccionario de variables de entorno adicionales para agregar a etcd.env, formateado como:
+##  etcd_extra_vars:
+##    var1: "value1"
+##    var2: "value2"
+## Tenga en cuenta que esto es diferente del rol etcd con ETCD_ prfexi, mayúsculas y guiones bajos
+etcd_extra_vars: {}
+
+# etcd_quota_backend_bytes: "2147483648"
+
+etcd_compaction_retention: "8"

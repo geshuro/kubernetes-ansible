@@ -1,0 +1,126 @@
+---
+# Kubernetes dashboard
+#real dashboard_enabled: true
+#prueba
+dashboard_enabled: true
+
+# Desplegar Helm
+helm_enabled: false
+
+# Desplegar Registry
+registry_enabled: false
+
+# Desplegar Metrics Server
+metrics_server_enabled: true
+
+local_path_provisioner_enabled: false
+
+# Desplegar del aprovisionador de volumen local
+#local_volume_provisioner_enabled: false
+local_volume_provisioner_enabled: false
+#local_volume_provisioner_name: "local_volume_provisioner"
+#local_volume_provisioner_namespace: kube-system
+#local_volume_provisioner_nodelabels:
+#  - node-role.kubernetes.io/node
+#local_volume_provisioner_ds_nodeselector:
+#  node-role.kubernetes.io/node: ""
+#local_volume_provisioner_storage_classes:
+#  local-storage:
+#    host_dir: /data/local-provisioner
+#    mount_dir: /data/local-provisioner
+#    volume_mode: Filesystem
+#    fs_type: ext4
+#    is_default_class: true
+
+# Desplegar del aprovisionador CephFS
+cephfs_provisioner_enabled: false
+# cephfs_provisioner_namespace: "cephfs-provisioner"
+# cephfs_provisioner_cluster: ceph
+# cephfs_provisioner_monitors: "172.24.0.1:6789,172.24.0.2:6789,172.24.0.3:6789"
+# cephfs_provisioner_admin_id: admin
+# cephfs_provisioner_secret: secret
+# cephfs_provisioner_storage_class: cephfs
+# cephfs_provisioner_reclaim_policy: Delete
+# cephfs_provisioner_claim_root: /volumes
+# cephfs_provisioner_deterministic_names: true
+
+# Desplegar del aprovisionador RBD
+rbd_provisioner_enabled: false
+# rbd_provisioner_namespace: rbd-provisioner
+# rbd_provisioner_replicas: 2
+# rbd_provisioner_monitors: "172.24.0.1:6789,172.24.0.2:6789,172.24.0.3:6789"
+# rbd_provisioner_pool: kube
+# rbd_provisioner_admin_id: admin
+# rbd_provisioner_secret_name: ceph-secret-admin
+# rbd_provisioner_secret: ceph-key-admin
+# rbd_provisioner_user_id: kube
+# rbd_provisioner_user_secret_name: ceph-secret-user
+# rbd_provisioner_user_secret: ceph-key-user
+# rbd_provisioner_user_secret_namespace: rbd-provisioner
+# rbd_provisioner_fs_type: ext4
+# rbd_provisioner_image_format: "2"
+# rbd_provisioner_image_features: layering
+# rbd_provisioner_storage_class: rbd
+# rbd_provisioner_reclaim_policy: Delete
+
+
+
+# Desplegar de Nginx ingress controller
+ingress_nginx_enabled: true
+ingress_nginx_host_network: false
+ingress_publish_status_address: ""
+ingress_nginx_nodeselector:
+  node-role.kubernetes.io/node-loadbalancer: "true"
+
+# ingress_nginx_nodeselector:
+#   kubernetes.io/os: "linux"
+# ingress_nginx_tolerations:
+#   - key: "node-role.kubernetes.io/master"
+#     operator: "Equal"
+#     value: ""
+#     effect: "NoSchedule"
+# ingress_nginx_namespace: "ingress-nginx"
+# ingress_nginx_insecure_port: 80
+# ingress_nginx_secure_port: 443
+# ingress_nginx_configmap:
+#   map-hash-bucket-size: "128"
+#   ssl-protocols: "SSLv2"
+# ingress_nginx_configmap_tcp_services:
+#   9000: "default/example-go:8080"
+# ingress_nginx_configmap_udp_services:
+#   53: "kube-system/coredns:53"
+# ingress_nginx_extra_args:
+#   - --default-ssl-certificate=default/foo-tls
+
+# Desplegar ambassador ingress controller
+ingress_ambassador_enabled: false
+# ingress_ambassador_namespace: "ambassador"
+# ingress_ambassador_version: "*"
+
+# Desplegar Cert manager
+cert_manager_enabled: false
+# cert_manager_namespace: "cert-manager"
+
+# Desplegar MetalLB
+metallb_enabled: false
+# metallb_ip_range:
+#   - "10.5.0.50-10.5.0.99"
+# metallb_version: v0.9.3
+# metallb_protocol: "layer2"
+# metallb_port: "7472"
+# metallb_limits_cpu: "100m"
+# metallb_limits_mem: "100Mi"
+# metallb_additional_address_pools:
+#   kube_service_pool:
+#     ip_range:
+#       - "10.5.1.50-10.5.1.99"
+#     protocol: "layer2"
+#     auto_assign: false
+# metallb_protocol: "bgp"
+# metallb_peers:
+#   - peer_address: 192.0.2.1
+#     peer_asn: 64512
+#     my_asn: 4200000000
+#   - peer_address: 192.0.2.2
+#     peer_asn: 64513
+#     my_asn: 4200000000

@@ -1,0 +1,146 @@
+---
+- name: Kubernetes Apps | Esperar por kube-apiserver
+  uri:
+    url: "{{ kube_apiserver_endpoint }}/healthz"
+    validate_certs: no
+    client_cert: "{{ kube_apiserver_client_cert }}"
+    client_key: "{{ kube_apiserver_client_key }}"
+  register: result
+  until: result.status == 200
+  retries: 10
+  delay: 6
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Verificar el estado de AppArmor
+  command: which apparmor_parser
+  register: apparmor_status
+  when:
+    - podsecuritypolicy_enabled
+    - inventory_hostname == groups['kube-master'][0]
+  failed_when: false
+
+- name: Kubernetes Apps | Establecer apparmor_enabled
+  set_fact:
+    apparmor_enabled: "{{ apparmor_status.rc == 0 }}"
+  when:
+    - podsecuritypolicy_enabled
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Renderizar plantillas para PodSecurityPolicy
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ kube_config_dir }}/{{ item.file }}"
+  register: psp_manifests
+  with_items:
+    - {file: psp.yml, type: psp, name: psp}
+    - {file: psp-cr.yml, type: clusterrole, name: psp-cr}
+    - {file: psp-crb.yml, type: rolebinding, name: psp-crb}
+  when:
+    - podsecuritypolicy_enabled
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Agregar policies, roles, bindings para PodSecurityPolicy
+  kube:
+    name: "{{ item.item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ kube_config_dir }}/{{ item.item.file }}"
+    state: "latest"
+  register: result
+  until: result is succeeded
+  retries: 10
+  delay: 6
+  with_items: "{{ psp_manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - not item is skipped
+  loop_control:
+    label: "{{ item.item.file }}"
+
+- name: Kubernetes Apps | Agregar ClusterRoleBinding para admitir nodos
+  template:
+    src: "node-crb.yml.j2"
+    dest: "{{ kube_config_dir }}/node-crb.yml"
+  register: node_crb_manifest
+  when:
+    - rbac_enabled
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Aplicar una solución alternativa para permitir que todos los nodos con cert O=system:nodes se registren
+  kube:
+    name: "kubernetes:system:node"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "clusterrolebinding"
+    filename: "{{ kube_config_dir }}/node-crb.yml"
+    state: latest
+  register: result
+  until: result is succeeded
+  retries: 10
+  delay: 6
+  when:
+    - rbac_enabled
+    - node_crb_manifest.changed
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Agregar webhook ClusterRole que otorga acceso a proxy, stats, log, spec, y metricas en un kubelet
+  template:
+    src: "node-webhook-cr.yml.j2"
+    dest: "{{ kube_config_dir }}/node-webhook-cr.yml"
+  register: node_webhook_cr_manifest
+  when:
+    - rbac_enabled
+    - kubelet_authorization_mode_webhook
+    - inventory_hostname == groups['kube-master'][0]
+  tags: node-webhook
+
+- name: Aplicar webhook ClusterRole
+  kube:
+    name: "system:node-webhook"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "clusterrole"
+    filename: "{{ kube_config_dir }}/node-webhook-cr.yml"
+    state: latest
+  when:
+    - rbac_enabled
+    - kubelet_authorization_mode_webhook
+    - node_webhook_cr_manifest.changed
+    - inventory_hostname == groups['kube-master'][0]
+  tags: node-webhook
+
+- name: Kubernetes Apps | Agregar ClusterRoleBinding para system:nodes al webhook ClusterRole
+  template:
+    src: "node-webhook-crb.yml.j2"
+    dest: "{{ kube_config_dir }}/node-webhook-crb.yml"
+  register: node_webhook_crb_manifest
+  when:
+    - rbac_enabled
+    - kubelet_authorization_mode_webhook
+    - inventory_hostname == groups['kube-master'][0]
+  tags: node-webhook
+
+- name: Conceder system:nodes del webhook ClusterRole
+  kube:
+    name: "system:node-webhook"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "clusterrolebinding"
+    filename: "{{ kube_config_dir }}/node-webhook-crb.yml"
+    state: latest
+  when:
+    - rbac_enabled
+    - kubelet_authorization_mode_webhook
+    - node_webhook_crb_manifest.changed
+    - inventory_hostname == groups['kube-master'][0]
+  tags: node-webhook
+
+- name: PriorityClass | Copiar archivo k8s-cluster-critical-pc.yml
+  copy: src=k8s-cluster-critical-pc.yml dest={{ kube_config_dir }}/k8s-cluster-critical-pc.yml
+  when: inventory_hostname == groups['kube-master']|last
+
+- name: PriorityClass | Crear k8s-cluster-critical
+  kube:
+    name: k8s-cluster-critical
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "PriorityClass"
+    filename: "{{ kube_config_dir }}/k8s-cluster-critical-pc.yml"
+    state: latest
+  when: inventory_hostname == groups['kube-master']|last

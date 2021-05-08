@@ -1,0 +1,47 @@
+---
+
+- name: Crear carpeta /shared sino existe
+  file:
+    path: /shared
+    state: directory
+    mode: '0777'
+
+- name: Crear carpeta {{ dir_disk1 }} con permisos
+  file:
+    path: '{{ dir_disk1 }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '777'
+
+- name: Crear carpeta {{ dir_tools }}  con permisos
+  file:
+    path: '{{ dir_tools }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '777'
+
+- name: Crear un xfs filesystem en /dev/xvdb
+  filesystem:
+    fstype: xfs
+    dev: /dev/xvdb
+
+- name: Crear un xfs filesystem en /dev/xvdc
+  filesystem:
+    fstype: xfs
+    dev: /dev/xvdc
+
+- name: Montar {{ dir_disk1 }} en /dev/xvdb
+  mount:
+    path: '{{ dir_disk1 }}'
+    src: /dev/xvdb
+    fstype: xfs
+    state: mounted
+
+- name: Montar {{ dir_tools }} en /dev/xvdc
+  mount:
+    path: '{{ dir_tools }}'
+    src: /dev/xvdc
+    fstype: xfs
+    state: mounted

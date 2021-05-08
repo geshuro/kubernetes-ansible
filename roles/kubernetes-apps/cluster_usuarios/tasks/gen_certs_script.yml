@@ -1,0 +1,94 @@
+---
+- name: Gen_certs | Crear directorio de certificados usuarios K8s
+  file:
+    path: "{{ usuario_config_dir }}"
+    group: "{{ usuario_cert_group }}"
+    state: directory
+    owner: kube
+    mode: 0700
+    recurse: yes
+
+- name: "Gen_certs | Crear directorio de script usuario (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ usuario_script_dir }}"
+    state: directory
+    owner: root
+    mode: 0700
+  run_once: yes
+  when: inventory_hostname == groups['kube-master'][0]
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: "Gen_certs | Crear directorio para certificados de usuario (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ usuario_config_dir }}"
+    group: "{{ usuario_cert_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: inventory_hostname == groups['kube-master'][0]
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Gen_certs | Copiar script de generación de certificados
+  template:
+    src: "crear-usuario-k8s-ssl.sh.j2"
+    dest: "{{ usuario_script_dir }}/crear-usuario-k8s-ssl.sh"
+    mode: 0700
+  run_once: yes
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  when:
+    - gen_certs|default(false)
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Gen_certs | Ejecutar el script de generación de certificados
+  command: "bash -x {{ usuario_script_dir }}/crear-usuario-k8s-ssl.sh  -s {{ usuario_cert_dir }} -u {{ item.usuario_ssl }} -g {{ item.grupo_usr_ssl }} -d {{ item.cant_dias_ssl }}"
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  with_items:
+    - "{{ certificados }}"
+  when:
+    - gen_certs|default(false)
+
+- name: Gen_certs | Comprobar los permisos del certificado
+  file:
+    path: "{{ usuario_config_dir }}"
+    group: "{{ usuario_cert_group }}"
+    state: directory
+    owner: kube
+    mode: 0640
+    recurse: yes
+
+- name: Gen_certs | Comprimir certificado personal
+  archive:
+    path:
+        - "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.crt"
+        - "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.key"
+    dest: "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.zip"
+    format: zip
+  with_items:
+    - "{{ certificados }}"
+
+- name: Gen_certs | Copiar certificados a bastion
+  fetch:
+    src: "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.zip"
+    dest: "{{ ruta_exportar_cert }}/{{ item.usuario_ssl }}.zip"
+    flat: yes
+  with_items:
+    - "{{ certificados }}"
+
+
+#- name: Gen_certs | Copiar certificados a bastion - parte 1
+#  fetch:
+#    src: "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.crt"
+#    dest: "{{ ruta_exportar_cert }}/{{ item.usuario_ssl }}.crt"
+#    flat: yes
+#  with_items:
+#    - "{{ certificados }}"
+#
+#- name: Gen_certs | Copiar certificados a bastion - parte 2
+#  fetch:
+#    src: "{{ usuario_cert_dir }}/{{ item.usuario_ssl }}.key"
+#    dest: "{{ ruta_exportar_cert }}/{{ item.usuario_ssl }}.key"
+#    flat: yes
+#  with_items:
+#    - "{{ certificados }}"

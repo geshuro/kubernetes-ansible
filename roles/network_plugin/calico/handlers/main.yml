@@ -1,0 +1,25 @@
+---
+- name: reset_calico_cni
+  command: /bin/true
+  notify:
+    - Eliminar 10-calico.conflist
+    - docker | Eliminar contenedores calico-node
+
+- name: Eliminar 10-calico.conflist
+  file:
+    path: /etc/cni/net.d/10-calico.conflist
+    state: absent
+
+- name: docker | Eliminar contenedores calico-node
+  shell: "{{ docker_bin_dir }}/docker ps -af name=k8s_POD_calico-node* -q | xargs --no-run-if-empty {{ docker_bin_dir }}/docker rm -f"
+  register: docker_calico_node_remove
+  until: docker_calico_node_remove is succeeded
+  retries: 5
+  when: container_manager in ["docker"]
+
+
+- name: Calico | Reload NetworkManager
+  service:
+    name: NetworkManager
+    state: reloaded
+  when: '"running" in nm_check.stdout'

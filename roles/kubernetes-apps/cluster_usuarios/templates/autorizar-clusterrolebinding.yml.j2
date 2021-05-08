@@ -1,0 +1,13 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: autorizar-{{ autorizar_grupo_usr }}-crb
+  namespace: {{ autorizar_namespace }}
+subjects:
+  - kind: Group
+    name: {{ autorizar_grupo_usr }}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: autorizar-{{ autorizar_grupo_usr }}-cr
+  apiGroup: rbac.authorization.k8s.io

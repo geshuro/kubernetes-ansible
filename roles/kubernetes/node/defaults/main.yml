@@ -1,0 +1,127 @@
+---
+# Cambiar a 0.0.0.0 para habilitar el acceso inseguro desde cualquier lugar (no recomendado)
+kube_apiserver_insecure_bind_address: 127.0.0.1
+
+# IP de host anunciada para kubelet. Esto afecta la configuración del complemento de red. Tener cuidado
+kubelet_address: "{{ ip | default(fallback_ips[inventory_hostname]) }}"
+
+# Enlazar dirección para kubelet. Establecer en 0.0.0.0 para escuchar en todas las interfaces
+kubelet_bind_address: "{{ ip | default('0.0.0.0') }}"
+
+# resolv.conf la base de configuracion dns
+kube_resolv_conf: "/etc/resolv.conf"
+
+# Establecer en vacío para evitar la creación de cgroup
+kubelet_enforce_node_allocatable: "\"\""
+
+# Establecer runtime cgroups
+kubelet_runtime_cgroups: "/systemd/system.slice"
+# Establecer kubelet cgroups
+kubelet_kubelet_cgroups: "/systemd/system.slice"
+
+### Fallar con el swap on (default true)
+kubelet_fail_swap_on: true
+
+# Reservar espacio para los recursos de kube
+kube_memory_reserved: 256Mi
+kube_cpu_reserved: 100m
+# Reservar para master hosts
+kube_master_memory_reserved: 512Mi
+kube_master_cpu_reserved: 200m
+
+# Establecer en true para reservar recursos para los system daemons
+system_reserved: false
+system_memory_reserved: 512Mi
+system_cpu_reserved: 500m
+# Reservar para master hosts
+system_master_memory_reserved: 256Mi
+system_master_cpu_reserved: 250m
+
+kubelet_status_update_frequency: 10s
+
+# Solicitudes de aplicación de load balancer
+loadbalancer_apiserver_memory_requests: 32M
+loadbalancer_apiserver_cpu_requests: 25m
+
+loadbalancer_apiserver_keepalive_timeout: 5m
+
+# Quitar comentario si se necesita habilitar tiempos de ejecución obsoletos
+# kube_api_runtime_config:
+#   - apps/v1beta1=true
+#   - apps/v1beta2=true
+#   - extensions/v1beta1/daemonsets=true
+#   - extensions/v1beta1/deployments=true
+#   - extensions/v1beta1/replicasets=true
+#   - extensions/v1beta1/networkpolicies=true
+#   - extensions/v1beta1/podsecuritypolicies=true
+
+# Un rango de puertos para reservar para servicios con visibilidad NodePort.
+# Incluido en ambos extremos del rango.
+kube_apiserver_node_port_range: "30000-32767"
+
+# Configurar la cantidad de pods que se pueden ejecutar en un solo nodo
+# el valor predeterminado es igual al valor predeterminado de la aplicación
+kubelet_max_pods: 110
+
+## Soportar parámetros que se pasarán a kubelet a través de kubelet-config.yaml
+kubelet_config_extra_args: {}
+
+## Soportar parámetros que se pasarán a kubelet a través de kubelet-config.yaml solo en nodos, no maestros
+kubelet_node_config_extra_args: {}
+
+# Número máximo de archivos logs de contenedor que puede estar presente para un contenedor.
+kubelet_logfiles_max_nr: 5
+
+# Tamaño máximo del archivo log del contenedor antes de rotarlo
+kubelet_logfiles_max_size: 10Mi
+
+## Soportar flags personalizadas que se pasarán a kubelet
+kubelet_custom_flags: []
+
+## Soportar flags personalizadas que se pasarán a kubelet solo en nodos, no maestros
+kubelet_node_custom_flags: []
+
+# Si no está vacío, utilizará esta cadena como identificación en lugar del hostname actual
+kube_override_hostname: >-
+  {{ inventory_hostname }}
+
+# El puerto de solo lectura para que Kubelet sirva sin autenticación/autorización.
+kube_read_only_port: 0
+
+# Puerto de healthz para Kubelet
+kubelet_healthz_port: 10248
+
+# Enlazar la dirección de healthz para Kubelet
+kubelet_healthz_bind_address: 127.0.0.1
+
+# sysctl_file_path para agregar sysctl conf 
+sysctl_file_path: "/etc/sysctl.d/99-sysctl.conf"
+
+
+## Soportar la versión mínima de tls, valores posibles: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+# tls_min_version: ""
+
+## Support tls cipher suites.
+# tls_cipher_suites:
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
+#   - TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_RSA_WITH_RC4_128_SHA
+#   - TLS_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_RSA_WITH_RC4_128_SHA

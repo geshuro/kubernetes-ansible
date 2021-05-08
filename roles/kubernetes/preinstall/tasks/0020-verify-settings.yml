@@ -1,0 +1,245 @@
+---
+- name: Detenerse si kube-master, kube-node o etcd está vacío
+  assert:
+    that: groups.get('{{ item }}')
+  with_items:
+    - kube-master
+    - kube-node
+    - etcd
+  run_once: true
+  when: not ignore_assert_errors
+
+- name: Detenerse si el tipo de SO no es systemd
+  assert:
+    that: ansible_service_mgr == "systemd"
+  when: not ignore_assert_errors
+
+- name: Detenerse si se desconoce el SO
+  assert:
+    that: ansible_os_family in ['RedHat', 'CentOS']
+    msg: "{{ ansible_os_family }} no es un sistema operativo conocido"
+  when: not ignore_assert_errors
+
+- name: Detenerse si se desconoce el network plugin
+  assert:
+    that: kube_network_plugin in ['calico', 'canal', 'flannel', 'weave', 'cloud', 'cilium', 'cni', 'contiv', 'ovn4nfv','kube-ovn', 'kube-router', 'macvlan']
+    msg: "{{ kube_network_plugin }} no es soportado"
+  when:
+    - kube_network_plugin is defined
+    - not ignore_assert_errors
+
+- name: Detenerse si la versión de Kubernetes no es compatible
+  assert:
+    that: kube_version is version(kube_version_min_required, '>=')
+    msg: "La versión actual del kubernetes solo admite versiones más recientes de Kubernetes que {{ kube_version_min_required }} - Esta tratando de aplicar {{ kube_version }}"
+  when: not ignore_assert_errors
+
+- name: "Detenerse si los valores booleanos conocidos se establecen como strings (Usar formato JSON en CLI: -e \"{'key': true }\")"
+  assert:
+    that: item.value|type_debug == 'bool'
+    msg: "{{ item.value }} no es un tipo bool"
+  run_once: yes
+  with_items:
+    - { name: download_run_once, value: "{{ download_run_once }}" }
+    - { name: deploy_netchecker, value: "{{ deploy_netchecker }}" }
+    - { name: download_always_pull, value: "{{ download_always_pull }}" }
+    - { name: helm_enabled, value: "{{ helm_enabled }}" }
+  when: not ignore_assert_errors
+
+- name: Detenerse si hay un numero par de hosts etcd
+  assert:
+    that: groups.etcd|length is not divisibleby 2
+  when:
+    - not ignore_assert_errors
+    - inventory_hostname in groups['etcd']
+
+- name: Detenerse si la memoria es demasiado pequeña para los maestros
+  assert:
+    that: ansible_memtotal_mb >= minimal_master_memory_mb
+  when:
+    - not ignore_assert_errors
+    - inventory_hostname in groups['kube-master']
+
+- name: Detenerse si la memoria es demasiado pequeña para los nodos
+  assert:
+    that: ansible_memtotal_mb >= minimal_node_memory_mb
+  when:
+    - not ignore_assert_errors
+    - inventory_hostname in groups['kube-node']
+
+- name: Garantizar que haya suficiente espacio de direcciones de red disponible para todos los pods
+  assert:
+    that: "{{ (kubelet_max_pods | default(110)) | int <= (2 ** (32 - kube_network_node_prefix | int)) - 2 }}"
+    msg: "No programe más pods en un nodo que las direcciones inet disponibles."
+  when:
+    - not ignore_assert_errors
+    - inventory_hostname in groups['k8s-cluster']
+    - kube_network_node_prefix is defined
+    - kube_network_plugin != 'calico'
+
+- name: Detenerse si ip var no coincide con las ips locales
+  assert:
+    that: ip in ansible_all_ipv4_addresses
+    msg: "'{{ ansible_all_ipv4_addresses }}' no contiene '{{ ip }}'"
+  when:
+    - not ignore_assert_errors
+    - ip is defined
+
+- name: Detenerse si no se puede hacer ping a access_ip
+  command: ping -c1 {{ access_ip }}
+  when:
+    - access_ip is defined
+    - not ignore_assert_errors
+
+- name: Detenerse si RBAC no está habilitado cuando el dashboard está habilitado
+  assert:
+    that: rbac_enabled
+  when:
+    - dashboard_enabled
+    - not ignore_assert_errors
+
+- name: Detenerse si RBAC y la autenticación anónima no están habilitados cuando el puerto inseguro está deshabilitado
+  assert:
+    that: rbac_enabled and kube_api_anonymous_auth
+  when:
+    - kube_apiserver_insecure_port == 0 and inventory_hostname in groups['kube-master']
+    - not ignore_assert_errors
+
+- name: Detenerse si la versión del kernel es demasiado baja
+  assert:
+    that: ansible_kernel.split('-')[0] is version('4.9.17', '>=')
+  when:
+    - kube_network_plugin == 'cilium' or cilium_deploy_additionally | default(false) | bool
+    - not ignore_assert_errors
+
+- name: Detenerse si el hostname es incorrecto
+  assert:
+    that: inventory_hostname is match("[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$")
+    msg: "El hostname debe constar de caracteres alfanuméricos en minúscula, '.' o '-', y debe comenzar y terminar con un carácter alfanumérico"
+  when: not ignore_assert_errors
+
+- name: Asegurar la versión mínima de calico
+  assert:
+    that: calico_version is version(calico_min_version_required, '>=')
+    msg: "calico_version es demasiado bajo. Versión mínima {{ calico_min_version_required }}"
+  run_once: yes
+  when:
+    - kube_network_plugin == 'calico'
+
+- name: Obtener la versión actual del clúster de calico
+  shell: "set -o pipefail && {{ bin_dir }}/calicoctl.sh version  | grep 'Cluster Version:' | awk '{ print $3}'"
+  args:
+    executable: /bin/bash
+  register: calico_version_on_server
+  async: 10
+  poll: 3
+  run_once: yes
+  changed_when: false
+  failed_when: false
+  when:
+    - kube_network_plugin == 'calico'
+
+- name: Verificar que la versión actual de Calico sea suficiente para actualizar
+  assert:
+    that:
+      - calico_version_on_server.stdout is version(calico_min_version_required, '>=')
+    msg: "Tu versión de calico no es lo suficientemente nueva para actualizarla. Versión mínima {{ calico_min_version_required }}"
+  when:
+    - kube_network_plugin == 'calico'
+    - 'calico_version_on_server.stdout is defined'
+    - calico_version_on_server.stdout
+    - inventory_hostname == groups['kube-master'][0]
+  run_once: yes
+
+- name: "Verificar que cluster_id esté configurado si calico_rr esta habilitado"
+  assert:
+    that:
+      - cluster_id is defined
+    msg: "Se requiere un cluster_id único si se usa calico_rr"
+  when:
+    - kube_network_plugin == 'calico'
+    - peer_with_calico_rr
+    - inventory_hostname == groups['kube-master'][0]
+  run_once: yes
+
+- name: "Comprobar que los nodos calico_rr estén en el grupo k8s-cluster"
+  assert:
+    that:
+      - '"k8s-cluster" in group_names'
+    msg: "calico-rr debe ser un grupo secundario del grupo k8s-cluster"
+  when:
+    - kube_network_plugin == 'calico'
+    - '"calico-rr" in group_names'
+
+- name: "Comprobar que kube_service_addresses este en el rango del network"
+  assert:
+    that:
+      - kube_service_addresses | ipaddr('net')
+    msg: "kube_service_addresses = '{{ kube_service_addresses }}' no es un rango de red válido"
+  run_once: yes
+
+- name: "Comprobar que kube_pods_subnet sea un rango de red"
+  assert:
+    that:
+      - kube_pods_subnet | ipaddr('net')
+    msg: "kube_pods_subnet = '{{ kube_pods_subnet }}' no es un rango de red válido"
+  run_once: yes
+
+- name: "Comprobar que kube_pods_subnet no colisione con kube_service_addresses"
+  assert:
+    that:
+      - kube_pods_subnet | ipaddr(kube_service_addresses) | string == 'None'
+    msg: "kube_pods_subnet no puede ser el mismo segmento de red que kube_service_addresses"
+  run_once: yes
+
+- name: Detener si se desconoce el modo dns
+  assert:
+    that: dns_mode in ['coredns', 'coredns_dual', 'manual', 'none']
+    msg: "dns_mode solo puede ser 'coredns', 'coredns_dual', 'manual' or 'none'"
+  when: dns_mode is defined
+  run_once: true
+
+- name: Detener si se desconoce el modo kube proxy
+  assert:
+    that: kube_proxy_mode in ['iptables', 'ipvs']
+    msg: "kube_proxy_mode solo puede ser 'iptables' or 'ipvs'"
+  when: kube_proxy_mode is defined
+  run_once: true
+
+- name: Detenerse si se elige vault
+  assert:
+    that: cert_management != 'vault'
+    msg: "Se ha eliminado la compatibilidad con vault, utilice 'script' o 'none'"
+  when: cert_management is defined
+  run_once: true
+
+- name: Detenerse si se desconoce cert_management
+  assert:
+    that: cert_management|d('script') in ['script', 'none']
+    msg: "cert_management solo puede ser 'script' o 'none'"
+  run_once: true
+
+- name: Detenerse si se desconoce resolvconf_mode
+  assert:
+    that: resolvconf_mode in ['docker_dns', 'host_resolvconf', 'none']
+    msg: "resolvconf_mode solo puede ser 'docker_dns', 'host_resolvconf' o 'none'"
+  when: resolvconf_mode is defined
+  run_once: true
+
+- name: Detenerse si el tipo de implementación de etcd no es host o docker
+  assert:
+    that: etcd_deployment_type in ['host', 'docker']
+    msg: "El tipo de implementación de etcd, 'etcd_deployment_type', debe ser host o docker"
+  run_once: true
+
+- name: Detenerse si download_localhost está habilitado pero download_run_once no lo está
+  assert:
+    that: download_run_once
+    msg: "download_localhost requiere habilitar download_run_once"
+  when: download_localhost
+
+- name: Detenerse si download_localhost está habilitado cuando container_manager no es docker
+  assert:
+    that: container_manager == 'docker'
+    msg: "Soporte download_run_once solo para docker."
+  when: download_run_once or download_force_cache

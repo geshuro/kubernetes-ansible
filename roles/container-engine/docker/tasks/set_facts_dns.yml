@@ -1,0 +1,64 @@
+---
+
+- name: Configurar el servidor dns para docker
+  set_fact:
+    docker_dns_servers: "{{ dns_servers }}"
+
+- name: Mostrar docker_dns_servers
+  debug:
+    msg: "{{ docker_dns_servers }}"
+
+- name: Agregar servidores upstream dns
+  set_fact:
+    docker_dns_servers: "{{ docker_dns_servers + upstream_dns_servers|default([]) }}"
+  when: dns_mode in ['coredns', 'coredns_dual']
+
+- name: Agregar global searchdomains
+  set_fact:
+    docker_dns_search_domains: "{{ docker_dns_search_domains + searchdomains|default([]) }}"
+
+- name: Comprobar el sistema nameservers
+  shell: set -o pipefail && grep "^nameserver" /etc/resolv.conf | sed -r 's/^nameserver\s*([^#\s]+)\s*(#.*)?/\1/'
+  args:
+    executable: /bin/bash
+  changed_when: False
+  register: system_nameservers
+  check_mode: no
+
+- name: Comprobar los search domains del sistema
+  shell: grep "^search" /etc/resolv.conf | sed -r 's/^search\s*([^#]+)\s*(#.*)?/\1/'
+  args:
+    executable: /bin/bash
+  changed_when: False
+  register: system_search_domains
+  check_mode: no
+
+- name: Agregar nameservers del sistema a opciones de docker
+  set_fact:
+    docker_dns_servers: "{{ docker_dns_servers | union(system_nameservers.stdout_lines) | unique }}"
+  when: system_nameservers.stdout
+
+- name: Agregar search domains del sistema a opciones de docker
+  set_fact:
+    docker_dns_search_domains: "{{ docker_dns_search_domains | union(system_search_domains.stdout.split()|default([])) | unique }}"
+  when: system_search_domains.stdout
+
+- name: Revisar el numero de nameservers
+  fail:
+    msg: "Demasiados nameservers. Puede disminuir el grado esta verificación configurando docker_dns_servers_strict = false en all.yml y solo usaremos los primeros 3."
+  when: docker_dns_servers|length > 3 and docker_dns_servers_strict|bool
+
+- name: rtrim el número de nameservers a 3
+  set_fact:
+    docker_dns_servers: "{{ docker_dns_servers[0:3] }}"
+  when: docker_dns_servers|length > 3 and not docker_dns_servers_strict|bool
+
+- name: Comprobar el número de search domains
+  fail:
+    msg: "Demasiados search domains"
+  when: docker_dns_search_domains|length > 6
+
+- name: Comprobar la longitud de los search domains
+  fail:
+    msg: "Los search domains excedieron el límite de 256 caracteres"
+  when: docker_dns_search_domains|join(' ')|length > 256

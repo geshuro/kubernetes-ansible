@@ -1,0 +1,3 @@
+---
+global_as_num: "64512"
+calico_baremetal_nodename: "{{ kube_override_hostname | default(inventory_hostname) }}"

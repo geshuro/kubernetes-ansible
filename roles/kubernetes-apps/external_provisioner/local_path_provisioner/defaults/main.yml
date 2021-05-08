@@ -1,0 +1,25 @@
+---
+local_path_provisioner_enabled: false
+local_path_provisioner_namespace: "local-path-storage-tools"
+local_path_provisioner_storage_class: "local-path-tools"
+local_path_provisioner_reclaim_policy: Delete
+local_path_provisioner_claim_root: /shared/disk1
+local_path_provisioner_is_default_storageclass: false
+local_path_provisioner_debug: false
+local_path_provisioner_helper_image_tag: "latest"
+local_path_provisioner_psp: "{{ local_path_provisioner_namespace }}"
+local_path_provisioner_crb: "{{ local_path_provisioner_namespace }}-bind"
+local_path_provisioner_image_repo: "rancher/local-path-provisioner"
+local_path_provisioner_image_tag: "v0.0.19"
+apparmor_enabled: false
+k8s_image_pull_policy: IfNotPresent
+nodo_role: "node-role.kubernetes.io/node-micro"
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: "{{ nodo_role }}"
+          operator: In
+          values:
+          - ""

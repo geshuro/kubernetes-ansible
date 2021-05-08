@@ -1,0 +1,5 @@
+---
+init_nfs_nodo: false
+sub_net_destino: 172.28.12.0/24
+dir_tools: "/shared/tools"
+dir_disk1: "/shared/disk1"

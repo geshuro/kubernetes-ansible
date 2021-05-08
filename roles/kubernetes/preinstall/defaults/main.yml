@@ -1,0 +1,50 @@
+---
+# Establecer en verdadero para permitir que las comprobaciones previas fallen y continúe la implementación
+ignore_assert_errors: false
+
+epel_enabled: false
+dns_late: false
+
+common_required_pkgs:
+  - "{{ (ansible_distribution == 'openSUSE Tumbleweed') | ternary('openssl-1_1', 'openssl') }}"
+  - curl
+  - rsync
+  - socat
+  - unzip
+  - e2fsprogs
+  - xfsprogs
+  - ebtables
+  - sshpass
+
+# Establecer en true si su red no es compatible con IPv6
+disable_ipv6_dns: false
+
+kube_cert_group: kube-cert
+kube_config_dir: /etc/kubernetes
+kube_cert_dir: "{{ kube_config_dir }}/ssl"
+kube_cert_compat_dir: /etc/kubernetes/pki
+kubelet_flexvolumes_plugins_dir: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+
+# Todos los nombres de host del inventario se escribirán en cada archivo /etc/hosts.
+populate_inventory_to_hosts_file: true
+
+sysctl_file_path: "/etc/sysctl.d/99-sysctl.conf"
+
+etc_hosts_localhost_entries:
+  127.0.0.1:
+    expected:
+      - localhost
+      - localhost.localdomain
+  ::1:
+    expected:
+      - localhost6
+      - localhost6.localdomain
+    unexpected:
+      - localhost
+      - localhost.localdomain
+
+# Requisito mínimo de memoria en MB para controles de seguridad
+minimal_node_memory_mb: 1024
+minimal_master_memory_mb: 1500
+
+yum_repo_dir: /etc/yum.repos.d

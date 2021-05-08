@@ -1,0 +1,17 @@
+---
+- name: kubeadm | Recuperar archivos para purgar
+  find:
+    paths: "{{ kube_cert_dir }}"
+    patterns: '*.pem'
+  register: files_to_purge_for_kubeadm
+
+- name: kubeadm | Purgar certificados antiguos
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ files_to_purge_for_kubeadm.files }}"
+
+- name: kubeadm | Purgar kubeconfig antiguo
+  file:
+    path: "{{ ansible_env.HOME | default('/root') }}/.kube/config"
+    state: absent

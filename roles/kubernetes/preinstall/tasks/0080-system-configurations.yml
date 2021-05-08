@@ -1,0 +1,73 @@
+---
+# configuracion selinux 
+- name: Confirmar selinux desplegado
+  stat:
+    path: /etc/selinux/config
+  when:
+    - ansible_os_family == "RedHat"
+  register: slc
+
+- name: Establecer la política de selinux
+  selinux:
+    policy: targeted
+    state: "{{ preinstall_selinux_state }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - slc.stat.exists
+  changed_when: False
+  tags:
+    - bootstrap-os
+
+- name: Deshabilitar la búsqueda de DNS IPv6
+  lineinfile:
+    dest: /etc/gai.conf
+    line: "precedence ::ffff:0:0/96  100"
+    state: present
+    create: yes
+    backup: yes
+  when:
+    - disable_ipv6_dns
+  tags:
+    - bootstrap-os
+
+- name: Configurar el archivo stat sysctl
+  stat:
+    path: "{{ sysctl_file_path }}"
+  register: sysctl_file_stat
+  tags:
+    - bootstrap-os
+
+- name: Cambiar la ruta del archivo sysctl al origen del enlace si está vinculado
+  set_fact:
+    sysctl_file_path: "{{ sysctl_file_stat.stat.lnk_source }}"
+  when:
+    - sysctl_file_stat.stat.islnk is defined
+    - sysctl_file_stat.stat.islnk
+  tags:
+    - bootstrap-os
+
+- name: Asegurar que exista la carpeta de ruta del archivo sysctl
+  file:
+    name: "{{ sysctl_file_path | dirname }}"
+    state: directory
+
+- name: Habilitar el reenvío de ip
+  sysctl:
+    sysctl_file: "{{ sysctl_file_path }}"
+    name: net.ipv4.ip_forward
+    value: 1
+    state: present
+    reload: yes
+
+- name: Asegurar los parámetros de kube-bench estén configurados
+  sysctl:
+    sysctl_file: /etc/sysctl.d/bridge-nf-call.conf
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    - { name: vm.overcommit_memory, value: 1 }
+    - { name: kernel.panic, value: 10 }
+    - { name: kernel.panic_on_oops, value: 1 }
+  when: kubelet_protect_kernel_defaults|bool

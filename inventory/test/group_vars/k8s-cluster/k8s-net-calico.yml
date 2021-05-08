@@ -1,0 +1,86 @@
+# see roles/network_plugin/calico/defaults/main.yml
+
+## With calico it is possible to distributed routes with border routers of the datacenter.
+## Warning : enabling router peering will disable calico's default behavior ('node mesh').
+## The subnets of each nodes will be distributed by the datacenter router
+# peer_with_router: false
+
+# Permitir la conectividad a Internet desde contenedores
+nat_outgoing: true
+
+# Habilitar el plugin IPAM "host-local" de Calico CNI
+# calico_ipam_host_local: true
+
+# Agregar el nombre de ippool predeterminado
+calico_pool_name: "default-pool"
+
+# Agregar bloque de ippool predeterminado (default kube_network_node_prefix)
+# calico_pool_blocksize: 24
+
+# Agregar ippool CIDR predeterminado (debe estar dentro kube_pods_subnet, de lo contrario por defecto es kube_pods_subnet)
+# calico_pool_cidr: 1.2.3.4/5
+
+# Global as_num (/calico/bgp/v1/global/as_num)
+global_as_num: "64512"
+
+# Puede establecer el valor de MTU aquí. Si se deja sin definir o vacío, 
+# no se especificará en la configuración CNI de calico, por lo que Calico 
+# usará los valores predeterminados incorporados.
+# El valor debe ser un número, no una cadena.
+# calico_mtu: 1500
+
+# Configure la MTU que se utilizará para las interfaces de carga de trabajo y los túneles.
+# - Si Wireguard está habilitado, configúrelo en su MTU de red - 60
+# - De otra manera, si el modo VXLAN o BPF está habilitado, configúrelo en su MTU de red - 50
+# - De otra manera, si IPIP está habilitado, configúrelo en su MTU de red - 20
+# - De otra manera, si no utiliza ningún encapsulado, establezca el MTU de su red.
+# calico_veth_mtu: 1440
+
+# Anunciar IP de clúster
+# calico_advertise_cluster_ips: true
+
+# Elegir el tipo de almacén de datos para calico: "etcd" oo "kdd" (kubernetes datastore)
+calico_datastore: "etcd"
+
+# Elegir el backend de iptables de Calico: "Legacy", "Auto" o "NFT" (FELIX_IPTABLESBACKEND)
+calico_iptables_backend: "Legacy"
+
+# Usar typha (solo con kdd)
+# typha_enabled: false
+
+# Generar certificados TLS para la comunicación typha <-> calico-node
+# typha_secure: false
+
+# Tipo de escala: 1 réplica por 100 nodos es adecuada
+# Número de réplicas de Typha
+# typha_replicas: 1
+
+# Establecer conexiones máximas de Typha
+# typha_max_connections_lower_limit: 300
+
+# Establecer backend de red calico: "bird", "vxlan" o "none"
+# bird habilita el enrutamiento BGP, requerido para el modo ipip.
+# calico_network_backend: bird
+
+# IP en IP y VXLAN son modos mutuamente exclusivos.
+# Establecer IP en modo de encapsulación IP: "Always", "CrossSubnet", "Never"
+# calico_ipip_mode: 'Always'
+
+# Establecer en modo de encapsulación VXLAN: "Always", "CrossSubnet", "Never"
+# calico_vxlan_mode: 'Never'
+
+# Configurar el puerto VXLAN y VNI
+# calico_vxlan_vni: 4096
+# calico_vxlan_port: 4789
+
+# Si desea utilizar IP_AUTODETECTION_METHOD no predeterminado para el nodo calico, establezca esta opción en una de las siguientes opciones:
+# * can-reach=DESTINATION
+# * interface=INTERFACE-REGEX
+# Mirar https://docs.projectcalico.org/v3.0/reference/node/configuration#ip-autodetection-methods
+# calico_ip_auto_method: "interface=eth.*"
+# Elegir el modo de inserción de iptables para Calico: "Insert" o "Append".
+# calico_felix_chaininsertmode: Insert
+
+# Si desea usar la interfaz de ruta predeterminada cuando usa múltiples interfaces con ruta dinámica (iproute2)
+# mirar https://docs.projectcalico.org/reference/node/configuration : FELIX_DEVICEROUTESOURCEADDRESS
+# calico_use_default_route_src_ipaddr: false

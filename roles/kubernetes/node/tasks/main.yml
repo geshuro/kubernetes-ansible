@@ -1,0 +1,147 @@
+---
+- import_tasks: facts.yml
+  tags:
+    - facts
+
+- import_tasks: pre_upgrade.yml
+  tags:
+    - kubelet
+
+- name: Asegurar que exista /var/lib/cni
+  file:
+    path: /var/lib/cni
+    state: directory
+    mode: 0755
+
+- import_tasks: install.yml
+  tags:
+    - kubelet
+
+- import_tasks: loadbalancer/nginx-proxy.yml
+  when:
+    - not is_kube_master
+    - loadbalancer_apiserver_localhost
+    - loadbalancer_apiserver_type == 'nginx'
+  tags:
+    - nginx
+
+- import_tasks: loadbalancer/haproxy.yml
+  when:
+    - not is_kube_master
+    - loadbalancer_apiserver_localhost
+    - loadbalancer_apiserver_type == 'haproxy'
+  tags:
+    - haproxy
+
+- name: Asegurar que el rango de nodePort esté reservado
+  sysctl:
+    name: net.ipv4.ip_local_reserved_ports
+    value: "{{ kube_apiserver_node_port_range }}"
+    sysctl_set: yes
+    sysctl_file: "{{ sysctl_file_path }}"
+    state: present
+    reload: yes
+  when: kube_apiserver_node_port_range is defined
+  tags:
+    - kube-proxy
+
+- name: Verificar si existe el módulo br_netfilter
+  command: "modinfo br_netfilter"
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/sbin"
+  register: modinfo_br_netfilter
+  failed_when: modinfo_br_netfilter.rc not in [0, 1]
+  changed_when: false
+
+- name: Verifique que la ruta del módulo br_netfilter exista
+  file:
+    path: /etc/modules-load.d
+    state: directory
+
+- name: Habilitar el módulo br_netfilter
+  modprobe:
+    name: br_netfilter
+    state: present
+  when: modinfo_br_netfilter.rc == 0
+
+- name: Persistir módulo br_netfilter
+  copy:
+    dest: /etc/modules-load.d/kubernetes-br_netfilter.conf
+    content: br_netfilter
+  when: modinfo_br_netfilter.rc == 0
+
+# kube-proxy necesita net.bridge.bridge-nf-call-iptables habilitado cuando se encuentra si br_netfilter no es un módulo
+- name: Comprobar si existe la clave bridge-nf-call-iptables
+  command: "sysctl net.bridge.bridge-nf-call-iptables"
+  failed_when: false
+  changed_when: false
+  register: sysctl_bridge_nf_call_iptables
+
+- name: Habilitar bridge-nf-call tables
+  sysctl:
+    name: "{{ item }}"
+    state: present
+    sysctl_file: "{{ sysctl_file_path }}"
+    value: "1"
+    reload: yes
+  when: sysctl_bridge_nf_call_iptables.rc == 0
+  with_items:
+    - net.bridge.bridge-nf-call-iptables
+    - net.bridge.bridge-nf-call-arptables
+    - net.bridge.bridge-nf-call-ip6tables
+
+- name: Módulo Kernel Modprobe para IPVS
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - ip_vs
+    - ip_vs_rr
+    - ip_vs_wrr
+    - ip_vs_sh
+  when: kube_proxy_mode == 'ipvs'
+  tags:
+    - kube-proxy
+
+- name: Modprobe nf_conntrack_ipv4 para kernels < 4.19
+  modprobe:
+    name: nf_conntrack_ipv4
+    state: present
+  register: enable_nf_conntrack
+  when:
+    - ansible_kernel.split('.')[0:3] | join('.')  < '4.19'
+    - kube_proxy_mode == 'ipvs'
+  tags:
+    - kube-proxy
+
+- name: Modprobe nf_conntrack para kernels >= 4.19
+  modprobe:
+    name: nf_conntrack
+    state: present
+  when:
+    - ansible_kernel.split('.')[0:3] | join('.')  >= '4.19'
+    - kube_proxy_mode == 'ipvs'
+  tags:
+    - kube-proxy
+
+- name: Persistencia de módulos ip_vs
+  copy:
+    dest: /etc/modules-load.d/kube_proxy-ipvs.conf
+    content: |
+      ip_vs
+      ip_vs_rr
+      ip_vs_wrr
+      ip_vs_sh
+      {% if enable_nf_conntrack is failed -%}
+      nf_conntrack
+      {%-   else -%}
+      nf_conntrack_ipv4
+      {%-   endif -%}
+  when: kube_proxy_mode == 'ipvs'
+  tags:
+    - kube-proxy
+
+- import_tasks: kubelet.yml
+  tags:
+    - kubelet
+    - kubeadm

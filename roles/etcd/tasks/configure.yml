@@ -1,0 +1,130 @@
+---
+- name: Configurar | Comprobar si el clúster etcd está en buen estado
+  shell: "set -o pipefail && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster status && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster health  2>&1 | grep -q -v 'Error: unhealthy cluster'"
+  args:
+    executable: /bin/bash
+  register: etcd_cluster_is_healthy
+  failed_when: false
+  changed_when: false
+  check_mode: no
+  run_once: yes
+  when: is_etcd_master and etcd_cluster_setup
+  tags:
+    - facts
+
+- name: Configurar | Comprobar si el clúster etcd-events está en buen estado
+  shell: "set -o pipefail && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster status && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster health  2>&1 | grep -q -v 'Error: unhealthy cluster'"
+  args:
+    executable: /bin/bash
+  register: etcd_events_cluster_is_healthy
+  failed_when: false
+  changed_when: false
+  check_mode: no
+  run_once: yes
+  when: is_etcd_master and etcd_events_cluster_setup
+  tags:
+    - facts
+
+- include_tasks: refresh_config.yml
+  when: is_etcd_master
+
+- name: Configurar | Copiar el archivo etcd.service systemd
+  template:
+    src: "etcd-{{ etcd_deployment_type }}.service.j2"
+    dest: /etc/systemd/system/etcd.service
+    backup: yes
+  when: is_etcd_master and etcd_cluster_setup
+
+- name: Configurar | Copiar el archivo etcd-events.service systemd
+  template:
+    src: "etcd-events-{{ etcd_deployment_type }}.service.j2"
+    dest: /etc/systemd/system/etcd-events.service
+    backup: yes
+  when: is_etcd_master and etcd_events_cluster_setup
+
+- name: Configurar | reload systemd
+  systemd:
+    daemon_reload: true
+  when: is_etcd_master
+
+# al escalar un nuevo etcd no se iniciará
+- name: Configurar | Asegurar que etcd se esté ejecutando
+  service:
+    name: etcd
+    state: started
+    enabled: yes
+  ignore_errors: "{{ etcd_cluster_is_healthy.rc == 0 }}"
+  when: is_etcd_master and etcd_cluster_setup
+
+# al escalar un nuevo etcd no se iniciará
+- name: Configurar | Asegurar que etcd-events se esté ejecutando
+  service:
+    name: etcd-events
+    state: started
+    enabled: yes
+  ignore_errors: "{{ etcd_events_cluster_is_healthy.rc == 0 }}"
+  when: is_etcd_master and etcd_events_cluster_setup
+
+- name: Configurar | Espere que el clúster etcd esté en buen estado
+  shell: "set -o pipefail && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster status && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster health 2>&1 | grep -v 'Error: unhealthy cluster' >/dev/null"
+  args:
+    executable: /bin/bash
+  register: etcd_cluster_is_healthy
+  until: etcd_cluster_is_healthy.rc == 0
+  retries: "{{ etcd_retries }}"
+  delay: "{{ retry_stagger | random + 3 }}"
+  changed_when: false
+  check_mode: no
+  run_once: yes
+  when:
+    - is_etcd_master
+    - etcd_cluster_setup
+  tags:
+    - facts
+
+- name: Configurar | Espere que el clúster etcd-events esté en buen estado
+  shell: "set -o pipefail && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster status && {{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem endpoint --cluster health 2>&1 | grep -v 'Error: unhealthy cluster' >/dev/null"
+  args:
+    executable: /bin/bash
+  register: etcd_events_cluster_is_healthy
+  until: etcd_events_cluster_is_healthy.rc == 0
+  retries: "{{ etcd_retries }}"
+  delay: "{{ retry_stagger | random + 3 }}"
+  changed_when: false
+  check_mode: no
+  run_once: yes
+  when:
+    - is_etcd_master
+    - etcd_events_cluster_setup
+  tags:
+    - facts
+
+- name: Configurar | Comprobar si el miembro está en el clúster etcd
+  shell: "{{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem member list | grep -q {{ etcd_access_address }}"
+  register: etcd_member_in_cluster
+  ignore_errors: true
+  changed_when: false
+  check_mode: no
+  when: is_etcd_master and etcd_cluster_setup
+  tags:
+    - facts
+
+- name: Configurar | Comprobar si el miembro está en el clúster etcd-events
+  shell: "{{ bin_dir }}/etcdctl --cacert={{ etcd_cert_dir }}/ca.pem --cert={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}.pem --key={{ etcd_cert_dir }}/admin-{{ inventory_hostname }}-key.pem member list | grep -q {{ etcd_access_address }}"
+  register: etcd_events_member_in_cluster
+  ignore_errors: true
+  changed_when: false
+  check_mode: no
+  when: is_etcd_master and etcd_events_cluster_setup
+  tags:
+    - facts
+
+- name: Configurar | Unir miembros al clúster etcd de uno en uno
+  include_tasks: join_etcd_member.yml
+  with_items: "{{ groups['etcd'] }}"
+  when: inventory_hostname == item and etcd_cluster_setup and etcd_member_in_cluster.rc != 0 and etcd_cluster_is_healthy.rc == 0
+
+- name: Configurar | Unir miembros al clúster etcd-events uno a la vez
+  include_tasks: join_etcd-events_member.yml
+  with_items: "{{ groups['etcd'] }}"
+  when: inventory_hostname == item and etcd_events_cluster_setup and etcd_events_member_in_cluster.rc != 0 and etcd_events_cluster_is_healthy.rc == 0

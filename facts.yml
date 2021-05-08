@@ -1,0 +1,19 @@
+---
+- name: Reunir datos
+  hosts: k8s-cluster:etcd:calico-rr
+  gather_facts: False
+  tasks:
+    - name: Reunir datos minimos
+      setup:
+        gather_subset: '!all'
+
+    - name: Reunir los datos necesarios
+      setup:
+        gather_subset: '!all,!min,network,hardware'
+        filter: "{{ item }}"
+      loop:
+        - ansible_distribution_major_version
+        - ansible_default_ipv4
+        - ansible_all_ipv4_addresses
+        - ansible_memtotal_mb
+        - ansible_swaptotal_mb

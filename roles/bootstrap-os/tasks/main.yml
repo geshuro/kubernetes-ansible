@@ -1,0 +1,32 @@
+---
+- name: Buscar /etc/os-release
+  raw: cat /etc/os-release
+  register: os_release
+  changed_when: false
+  # Este comando siempre debe ejecutarse, incluso en modo de verificación
+  check_mode: false
+  environment: {}
+
+- include_tasks: bootstrap-centos.yml
+  when: '"CentOS" in os_release.stdout or "Red Hat Enterprise Linux" in os_release.stdout'
+
+- name: Crear remote_tmp para que sea utilizado por otro módulo
+  file:
+    path: "{{ ansible_remote_tmp | default('~/.ansible/tmp') }}"
+    state: directory
+    mode: 0700
+
+- name: "Instalar paquete ceph-commmon"
+  package:
+    name:
+      - ceph-common
+    state: present
+  when: rbd_provisioner_enabled|default(false)
+
+- name: Asegurar existencia de carpeta bash_completion.d
+  file:
+    name: /etc/bash_completion.d/
+    state: directory
+    owner: root
+    group: root
+    mode: 0755

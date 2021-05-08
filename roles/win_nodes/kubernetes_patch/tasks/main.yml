@@ -1,0 +1,38 @@
+---
+
+- name: Asegurar que exista el directorio de manifiestos de usuario
+  file:
+    path: "{{ kubernetes_user_manifests_path }}/kubernetes"
+    state: directory
+    recurse: yes
+  tags: [init, cni]
+
+- name: Aplicar kube-proxy nodeselector
+  block:
+    - name: Verificar el nodeselector actual para kube-proxy daemonset
+      command: >-
+        {{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf
+        get ds kube-proxy --namespace=kube-system
+        -o jsonpath='{.spec.template.spec.nodeSelector.{{ kube_proxy_nodeselector | regex_replace('\.', '\\.') }}}'
+      register: current_kube_proxy_state
+      retries: 60
+      delay: 5
+      until: current_kube_proxy_state is succeeded
+      changed_when: false
+
+    - name: Aplicar el parche de nodeselector para kube-proxy daemonset
+      shell: >-
+        {{ bin_dir }}/kubectl --kubeconfig {{ kube_config_dir }}/admin.conf
+        patch ds kube-proxy --namespace=kube-system --type=strategic -p
+        '{"spec":{"template":{"spec":{"nodeSelector":{"{{ kube_proxy_nodeselector }}":"linux"} }}}}'
+      register: patch_kube_proxy_state
+      when: current_kube_proxy_state.stdout | trim | lower != "linux"
+
+    - debug: msg={{ patch_kube_proxy_state.stdout_lines }}
+      when: patch_kube_proxy_state is not skipped
+
+    - debug: msg={{ patch_kube_proxy_state.stderr_lines }}
+      when: patch_kube_proxy_state is not skipped
+  tags: init
+  when:
+    - kube_proxy_deployed

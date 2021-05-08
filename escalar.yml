@@ -1,0 +1,86 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: "Configurar variable entorno de proxy"
+      set_fact:
+        proxy_env:
+          http_proxy: "{{ http_proxy | default ('') }}"
+          HTTP_PROXY: "{{ http_proxy | default ('') }}"
+          https_proxy: "{{ https_proxy | default ('') }}"
+          HTTPS_PROXY: "{{ https_proxy | default ('') }}"
+          no_proxy: "{{ no_proxy | default ('') }}"
+          NO_PROXY: "{{ no_proxy | default ('') }}"
+      no_log: true
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"] }
+
+- name: Arrancar cualquier worker nuevo
+  hosts: kube-node
+  strategy: linear
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  gather_facts: false
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: bootstrap-os, tags: bootstrap-os }
+
+- name: Reunir datos
+  tags: always
+  import_playbook: facts.yml
+
+- name: Generar certificados etcd
+  hosts: etcd
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: etcd, tags: etcd, etcd_cluster_setup: false }
+
+- name: Descargar imágenes al caché del host ansible a través del primer nodo kube-master
+  hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults, when: "not skip_downloads and download_run_once and not download_localhost" }
+    - { role: kubernetes/preinstall, tags: preinstall, when: "not skip_downloads and download_run_once and not download_localhost" }
+    - { role: download, tags: download, when: "not skip_downloads and download_run_once and not download_localhost" }
+
+- name: Dirigirse solo a los nuevos nodos e instalar y verificar kubelet, contenedor y registrar en etcd.
+  hosts: kube-node
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes/preinstall, tags: preinstall }
+    - { role: container-engine, tags: "container-engine", when: deploy_container_engine|default(true) }
+    - { role: download, tags: download, when: "not skip_downloads" }
+    - { role: etcd, tags: etcd, etcd_cluster_setup: false, when: "not etcd_kubeadm_enabled|default(false)" }
+  environment: "{{ proxy_env }}"
+
+- name: Dirigirse solo a los nuevos nodos e instalar y verificar el kube-node.
+  hosts: kube-node
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes/node, tags: node }
+  environment: "{{ proxy_env }}"
+
+- name: Dirigirse solo a los nuevos nodos e instalar y verificar el network plugin.
+  hosts: kube-node
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: ansiblerole-defaults }
+    - { role: kubernetes/kubeadm, tags: kubeadm }
+    - { role: network_plugin, tags: network }
+    - { role: kubernetes/node-label, tags: node-label }
+  environment: "{{ proxy_env }}"

@@ -1,0 +1,20 @@
+---
+- name: reset | Comprobar el dispositivo de red dummy0
+  stat:
+    path: /sys/class/net/dummy0
+  register: dummy0
+
+- name: reset | Eliminar el dispositivo de red creado por calico
+  command: ip link del dummy0
+  when: dummy0.stat.exists
+
+- name: reset | Obtener rutas restantes establecidas por bird
+  command: ip route show proto bird
+  changed_when: false
+  register: bird_routes
+
+- name: reset | Eliminar las rutas restantes establecidas por bird
+  command: "ip route del {{ bird_route }} proto bird"
+  with_items: "{{ bird_routes.stdout_lines }}"
+  loop_control:
+    loop_var: bird_route

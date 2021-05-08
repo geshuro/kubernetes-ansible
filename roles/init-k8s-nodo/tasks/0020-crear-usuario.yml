@@ -1,0 +1,7 @@
+---
+
+- name: Crear usuario admcuc
+  user:
+    name: admcuc
+    password: "admcuc"
+    group: wheel

@@ -1,0 +1,4 @@
+---
+## CentOS/RHEL establecer variables
+# Use el yum plugin fastestmirror
+centos_fastestmirror_enabled: false

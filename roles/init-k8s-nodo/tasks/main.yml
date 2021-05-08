@@ -1,0 +1,18 @@
+---
+
+- import_tasks: 0010-subripcion-repo.yml
+  when:
+    - init_k8s_nodo
+
+- import_tasks: 0020-crear-usuario.yml
+  when:
+    - init_k8s_nodo
+
+- import_tasks: 0030-firewalld.yml
+  when:
+    - init_k8s_nodo
+
+- import_tasks: 0040-docker-montar.yml
+  when:
+    - init_k8s_nodo
+    - docker_montar

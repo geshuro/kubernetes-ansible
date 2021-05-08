@@ -1,0 +1,14 @@
+---
+- name: Actualizar configuración | Crear archivo de configuración etcd
+  template:
+    src: etcd.env.j2
+    dest: /etc/etcd.env
+  notify: restart etcd
+  when: is_etcd_master and etcd_cluster_setup
+
+- name: Actualizar configuración | Crear archivo de configuración etcd-events
+  template:
+    src: etcd-events.env.j2
+    dest: /etc/etcd-events.env
+  notify: restart etcd-events
+  when: is_etcd_master and etcd_events_cluster_setup

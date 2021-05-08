@@ -1,0 +1,8 @@
+---
+dependencies:
+  - role: adduser
+    user: "{{ addusers.etcd }}"
+    when: not (is_fedora_coreos)
+  - role: adduser
+    user: "{{ addusers.kube }}"
+    when: not (is_fedora_coreos)

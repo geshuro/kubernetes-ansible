@@ -1,0 +1,110 @@
+---
+- name: Master | restart kubelet
+  command: /bin/true
+  notify:
+    - Master | reload systemd
+    - Master | reload kubelet
+    - Master | espere los pods estaticos maestros
+
+- name: Master | espere los pods estaticos maestros
+  command: /bin/true
+  notify:
+    - Master | Esperar a que el apiserver se esté ejecutando
+    - Master | Esperar al kube-scheduler
+    - Master | Esperar al kube-controller-manager
+
+- name: Master | Restart apiserver
+  command: /bin/true
+  notify:
+    - Master | Eliminar apiserver container docker
+    - Master | Esperar a que el apiserver se esté ejecutando
+
+- name: Master | Restart kube-scheduler
+  command: /bin/true
+  notify:
+    - Master | Eliminar scheduler container docker
+    - Master | Esperar al kube-scheduler
+
+- name: Master | Restart kube-controller-manager
+  command: /bin/true
+  notify:
+    - Master | Eliminar controller manager container docker
+    - Master | Esperar al kube-controller-manager
+
+- name: Master | reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Master | reload kubelet
+  service:
+    name: kubelet
+    state: restarted
+
+- name: Master | Eliminar apiserver container docker
+  shell: docker ps -af name=k8s_kube-apiserver* -q | xargs --no-run-if-empty docker rm -f
+  register: remove_apiserver_container
+  retries: 10
+  until: remove_apiserver_container.rc == 0
+  delay: 1
+  when: container_manager == "docker"
+
+- name: Master | Eliminar scheduler container docker
+  shell: "docker ps -af name=k8s_kube-scheduler* -q | xargs --no-run-if-empty docker rm -f"
+  register: remove_scheduler_container
+  retries: 10
+  until: remove_scheduler_container.rc == 0
+  delay: 1
+  when: container_manager == "docker"
+
+- name: Master | Eliminar controller manager container docker
+  shell: "docker ps -af name=k8s_kube-controller-manager* -q | xargs --no-run-if-empty docker rm -f"
+  register: remove_cm_container
+  retries: 10
+  until: remove_cm_container.rc == 0
+  delay: 1
+  when: container_manager == "docker"
+
+- name: Master | Esperar al kube-scheduler
+  uri:
+    url: https://localhost:10259/healthz
+    validate_certs: no
+  register: scheduler_result
+  until: scheduler_result.status == 200
+  retries: 60
+  delay: 1
+
+- name: Master | Esperar al kube-controller-manager
+  uri:
+    url: https://localhost:10257/healthz
+    validate_certs: no
+  register: controller_manager_result
+  until: controller_manager_result.status == 200
+  retries: 60
+  delay: 1
+
+- name: Master | Esperar a que el apiserver se esté ejecutando
+  uri:
+    url: "{{ kube_apiserver_endpoint }}/healthz"
+    validate_certs: no
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 1
+
+- name: Master | Establecer secret_changed
+  command: /bin/true
+  notify:
+    - Master | Establecer secret_changed en true
+    - Master | Copiar nuevo kubeconfig para usuario root
+
+- name: Master | Establecer secret_changed en true
+  set_fact:
+    secret_changed: true
+
+- name: Master | Copiar nuevo kubeconfig para usuario root
+  copy:
+    src: "{{ kube_config_dir }}/admin.conf"
+    dest: "{{ ansible_env.HOME | default('/root') }}/.kube/config"
+    remote_src: yes
+    mode: "0600"
+    backup: yes

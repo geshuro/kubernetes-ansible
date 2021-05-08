@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "{{ networkpolicies.egress.deny_all_trafico_external.nombre }}-external-egress"
+spec:
+  podSelector:
+    matchLabels:
+      {{ networkpolicies.egress.deny_all_trafico_external.pod_matchlabels | to_nice_yaml(indent=2) | trim | indent(6) }}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  - to:
+    - namespaceSelector: {}

@@ -1,0 +1,241 @@
+---
+
+- name: reiniciar | detener servicio kubelet
+  service:
+    name: "{{ item }}"
+    state: stopped
+  with_items:
+    - kubelet
+  failed_when: false
+  tags:
+    - services
+
+- name: reiniciar | eliminar servicios
+  file:
+    path: "/etc/systemd/system/{{ item }}.service"
+    state: absent
+  with_items:
+    - kubelet
+    - calico-node
+  register: services_removed
+  tags:
+    - services
+
+- name: reiniciar | eliminar configuraciones docker 
+  file:
+    path: "/etc/systemd/system/docker.service.d/{{ item }}"
+    state: absent
+  with_items:
+    - docker-dns.conf
+    - docker-options.conf
+    - http-proxy.conf
+  register: docker_dropins_removed
+  tags:
+    - docker
+
+- name: reiniciar | systemctl daemon-reload
+  systemd:
+    daemon_reload: true
+  when: services_removed.changed or docker_dropins_removed.changed
+
+- name: reiniciar | eliminar todo los contenedores
+  shell: "set -o pipefail && {{ docker_bin_dir }}/docker ps -aq | xargs -r docker rm -fv"
+  args:
+    executable: /bin/bash
+  register: remove_all_containers
+  retries: 4
+  until: remove_all_containers.rc == 0
+  delay: 5
+  when: container_manager == "docker"
+  tags:
+    - docker
+
+- name: reiniciar | reiniciar Docker si es necesario
+  service:
+    name: docker
+    state: restarted
+  when: docker_dropins_removed.changed and container_manager == "docker"
+  tags:
+    - docker
+
+- name: reiniciar | detener servicio etcd
+  service:
+    name: "{{ item }}"
+    state: stopped
+  with_items:
+    - etcd
+    - etcd-events
+  failed_when: false
+  tags:
+    - services
+
+- name: reiniciar | eliminar servicio etcd
+  file:
+    path: "/etc/systemd/system/{{ item }}.service"
+    state: absent
+  with_items:
+    - etcd
+    - etcd-events
+  register: services_removed
+  tags:
+    - services
+
+- name: reiniciar | recopilar directorios de kubelet montados
+  shell: set -o pipefail && mount | grep /var/lib/kubelet/ | awk '{print $3}' | tac
+  args:
+    executable: /bin/bash
+    warn: false
+  check_mode: no
+  register: mounted_dirs
+  failed_when: false
+  tags:
+    - mounts
+
+- name: reiniciar | desmontar directorios de kubelet
+  command: umount -f {{ item }}
+  with_items: "{{ mounted_dirs.stdout_lines }}"
+  register: umount_dir
+  when: mounted_dirs
+  retries: 4
+  until: umount_dir.rc == 0
+  delay: 5
+  tags:
+    - mounts
+
+- name: flush iptables
+  iptables:
+    table: "{{ item }}"
+    flush: yes
+  with_items:
+    - filter
+    - nat
+    - mangle
+  when: flush_iptables|bool
+  tags:
+    - iptables
+
+- name: Limpiar el table del servidor virtual IPVS
+  command: "ipvsadm -C"
+  when:
+    - kube_proxy_mode == 'ipvs' and inventory_hostname in groups['k8s-cluster']
+
+- name: reiniciar | comprobar el dispositivo de network kube-ipvs0
+  stat:
+    path: /sys/class/net/kube-ipvs0
+  register: kube_ipvs0
+
+- name: reiniciar | eliminar kube-ipvs0
+  command: "ip link del kube-ipvs0"
+  when:
+    - kube_proxy_mode == 'ipvs'
+    - kube_ipvs0.stat.exists
+
+- name: reiniciar | comprobar el device network nodelocaldns
+  stat:
+    path: /sys/class/net/nodelocaldns
+  register: nodelocaldns_device
+
+- name: reiniciar | eliminar nodelocaldns
+  command: "ip link del nodelocaldns"
+  when:
+    - enable_nodelocaldns|default(false)|bool
+    - nodelocaldns_device.stat.exists
+
+- name: reiniciar | eliminar algunos archivos y directorios
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ kube_config_dir }}"
+    - /var/lib/kubelet
+    - "{{ ansible_env.HOME | default('/root') }}/.kube"
+    - "{{ ansible_env.HOME | default('/root') }}/.helm"
+    - "{{ etcd_data_dir }}"
+    - "{{ etcd_events_data_dir }}"
+    - "{{ etcd_config_dir }}"
+    - /var/log/calico
+    - /etc/cni
+    - "{{ nginx_config_dir }}"
+    - /etc/dnsmasq.d
+    - /etc/dnsmasq.conf
+    - /etc/dnsmasq.d-available
+    - /etc/etcd.env
+    - /etc/calico
+    - /opt/cni
+    - /etc/dhcp/dhclient.d/zdnsupdate.sh
+    - /etc/dhcp/dhclient-exit-hooks.d/zdnsupdate
+    - /run/kubernetes
+    - /usr/local/share/ca-certificates/etcd-ca.crt
+    - /usr/local/share/ca-certificates/kube-ca.crt
+    - /usr/local/share/ca-certificates/vault-ca.crt
+    - /etc/ssl/certs/etcd-ca.pem
+    - /etc/ssl/certs/kube-ca.pem
+    - /etc/ssl/certs/vault-ca.crt
+    - /etc/pki/ca-trust/source/anchors/etcd-ca.crt
+    - /etc/pki/ca-trust/source/anchors/kube-ca.crt
+    - /var/log/pods/
+    - "{{ bin_dir }}/kubelet"
+    - "{{ bin_dir }}/etcd-scripts"
+    - "{{ bin_dir }}/etcd"
+    - "{{ bin_dir }}/etcd-events"
+    - "{{ bin_dir }}/etcdctl"
+    - "{{ bin_dir }}/kubernetes-scripts"
+    - "{{ bin_dir }}/kubectl"
+    - "{{ bin_dir }}/kubeadm"
+    - "{{ bin_dir }}/hyperkube"
+    - "{{ bin_dir }}/helm"
+    - "{{ bin_dir }}/calicoctl"
+    - "{{ bin_dir }}/calicoctl.sh"
+    - "{{ bin_dir }}/calico-upgrade"
+    - /var/lib/cni
+    - /var/lib/calico
+    - /run/calico
+  ignore_errors: yes
+  tags:
+    - files
+
+- name: reiniciar | eliminar la configuración de dns de dhclient.conf
+  blockinfile:
+    path: "{{ item }}"
+    state: absent
+    marker: "# Ansible entries {mark}"
+  failed_when: false
+  with_items:
+    - /etc/dhclient.conf
+    - /etc/dhcp/dhclient.conf
+  tags:
+    - files
+    - dns
+
+- name: reiniciar | eliminar host entries from /etc/hosts
+  blockinfile:
+    path: "/etc/hosts"
+    state: absent
+    marker: "# Ansible inventory hosts {mark}"
+  tags:
+    - files
+    - dns
+
+- name: reiniciar | incluir archivo con tareas de reinicio específicas para network_plugin si es que existe
+  include_tasks: "{{ (role_path + '/../network_plugin/' + kube_network_plugin + '/tasks/reset.yml') | realpath  }}"
+  when:
+    - kube_network_plugin in ['calico']
+  tags:
+    - network
+
+- name: reiniciar | reiniciar network
+  service:
+    name: >-
+      {% if ansible_os_family == "RedHat" -%}
+      {%- if ansible_distribution_major_version|int == 8 -%}
+      NetworkManager
+      {%- else -%}
+      network
+      {%- endif -%}
+      {%- endif %}
+    state: restarted
+  when:
+    - reset_restart_network
+  tags:
+    - services
+    - network

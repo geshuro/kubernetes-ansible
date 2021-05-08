@@ -1,0 +1,8 @@
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: k8s-cluster-critical
+value: 1000000000
+globalDefault: false
+description: "Esta clase de prioridad solo debe ser utilizada por los pods instalados por el ansiblerole."

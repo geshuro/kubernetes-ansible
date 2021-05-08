@@ -1,0 +1,67 @@
+---
+- name: Reunir datos del host para obtener ansible_distribution_version ansible_distribution_major_version
+  setup:
+    gather_subset: '!all'
+    filter: ansible_distribution_*version
+
+# CentOS viene con python instalado
+
+- name: Comprobar la presencia de fastestmirror.conf
+  stat:
+    path: /etc/yum/pluginconf.d/fastestmirror.conf
+  register: fastestmirror
+
+# El complemento fastestmirror puede ralentizar las tareas de Ansible
+- name: Deshabilitar el complemento fastestmirror si se solicita
+  lineinfile:
+    dest: /etc/yum/pluginconf.d/fastestmirror.conf
+    regexp: "^enabled=.*"
+    line: "enabled=0"
+    state: present
+  become: true
+  when:
+    - fastestmirror.stat.exists
+    - not centos_fastestmirror_enabled
+
+- name: Agregar proxy hostname a /etc/rhsm/rhsm.conf si http_proxy está definido
+  lineinfile:
+    dest: /etc/rhsm/rhsm.conf
+    regexp: "^proxy_hostname =.*"
+    line: "proxy_hostname ={{ proxy_hostname }}"
+    state: present
+  become: true
+  when:
+    - '"Red Hat Enterprise Linux" in os_release.stdout'
+    - proxy_hostname is defined
+    - http_proxy is defined or https_proxy is defined
+    - no_proxy is not defined
+
+- name: Agregar proxy port a /etc/rhsm/rhsm.conf si http_proxy está definido
+  lineinfile:
+    dest: /etc/rhsm/rhsm.conf
+    regexp: "^proxy_port =.*"
+    line: "proxy_port ={{ proxy_port }}"
+    state: present
+  become: true
+  when:
+    - '"Red Hat Enterprise Linux" in os_release.stdout'
+    - proxy_port is defined
+    - http_proxy is defined or https_proxy is defined
+    - no_proxy is not defined
+
+- name: Agregar proxy a /etc/yum.conf si http_proxy está definido
+  ini_file:
+    path: "/etc/yum.conf"
+    section: main
+    option: proxy
+    value: "{{ http_proxy | default(omit) }}"
+    state: "{{ http_proxy | default(False) | ternary('present', 'absent') }}"
+    no_extra_spaces: true
+  become: true
+
+# libselinux-python se requiere en hosts habilitados para SELinux
+- name: Instalar el paquete libselinux python
+  package:
+    name: "{{ ( (ansible_distribution_major_version | int) < 8) | ternary('libselinux-python','python3-libselinux') }}"
+    state: present
+  become: true

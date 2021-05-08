@@ -1,0 +1,36 @@
+---
+- name: Obtenga la versión de kubeadm
+  command: "{{ bin_dir }}/kubeadm version -o short"
+  register: kubeadm_output
+  changed_when: false
+
+- name: Establecer la versión de la api de kubeadm en v1beta2
+  set_fact:
+    kubeadmConfig_api_version: v1beta2
+#Recomendacion seguridad consorcio - INICIO
+- name: kubeadm | Crear directorio para manifiestos EventRateLimit
+  file:
+    path: "{{ kube_eventratelimit_dir }}"
+    group: root
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+
+- name: kubeadm | Crear configuración de EventRateLimit
+  template:
+    src: "event-rate-limit.yaml.j2"
+    dest: "{{ kube_eventratelimit_dir }}/event-rate-limit.yaml"
+    mode: 0640
+
+- name: kubeadm | Crear configuración de AdmissionConfiguration
+  template:
+    src: "admission-configuration.yaml.j2"
+    dest: "{{ kube_eventratelimit_dir }}/admission-configuration.yaml"
+    mode: 0640
+#Recomendacion seguridad consorcio - FIN
+- name: kubeadm | Crear configuración de kubeadm
+  template:
+    src: "kubeadm-config.{{ kubeadmConfig_api_version }}.yaml.j2"
+    dest: "{{ kube_config_dir }}/kubeadm-config.yaml"
+    mode: 0640

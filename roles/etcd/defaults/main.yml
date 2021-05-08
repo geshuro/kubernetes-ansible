@@ -1,0 +1,63 @@
+---
+# Establecer en false para realizar solo la gestión de certificados
+etcd_cluster_setup: true
+etcd_events_cluster_setup: false
+
+# Establecer como true para separar los eventos de k8s en un clúster etcd diferente
+etcd_events_cluster_enabled: false
+
+etcd_backup_prefix: "/var/backups"
+etcd_data_dir: "/var/lib/etcd"
+
+
+etcd_config_dir: /etc/ssl/etcd
+etcd_cert_dir: "{{ etcd_config_dir }}/ssl"
+etcd_cert_group: root
+# Nota: Esto no configura las entradas de DNS. Simplemente agrega el siguiente DNS
+# entradas al certificado
+etcd_cert_alt_names:
+  - "etcd.kube-system.svc.{{ dns_domain }}"
+  - "etcd.kube-system.svc"
+  - "etcd.kube-system"
+  - "etcd"
+etcd_cert_alt_ips: []
+
+etcd_script_dir: "{{ bin_dir }}/etcd-scripts"
+
+etcd_heartbeat_interval: "250"
+etcd_election_timeout: "5000"
+
+etcd_metrics: "basic"
+
+# Descomente para establecer un puerto separado para etcd para exponer métricas
+# etcd_metrics_port: 2381
+
+## Un diccionario de variables de entorno adicionales para agregar a etcd.env, formateado como:
+##  etcd_extra_vars:
+##    ETCD_VAR1: "value1"
+##    ETCD_VAR2: "value2"
+etcd_extra_vars: {}
+
+# Limites
+# Limite la memoria solo si <4 GB de memoria en el host. 0 = ilimitado
+etcd_memory_limit: "{% if ansible_memtotal_mb < 4096 %}512M{% else %}0{% endif %}"
+
+# etcd_quota_backend_bytes: "2147483648"
+
+# Descomentar para configurar el recurso compartido de CPU para etcd
+# etcd_cpu_limit: 300m
+
+etcd_blkio_weight: 1000
+
+etcd_node_cert_hosts: "{{ groups['k8s-cluster'] | union(groups.get('calico-rr', [])) | union(groups.get('vault', [])) }}"
+
+etcd_compaction_retention: "8"
+
+# Obligar a clientes como etcdctl a usar certificados TLS (diferente a la seguridad entre pares)
+etcd_secure_client: true
+
+# Habilitar la autenticación de certificado de cliente par
+etcd_peer_client_auth: true
+
+# Número de reintentos
+etcd_retries: 4

@@ -1,0 +1,60 @@
+---
+- name: Asegurar que el directorio de configuración dinámica de kubelet sea editable
+  file:
+    path: "{{ dynamic_kubelet_configuration_dir }}"
+    mode: 0600
+    state: directory
+  when: dynamic_kubelet_configuration
+
+- name: Obtener la version de kubeadm
+  command: "{{ bin_dir }}/kubeadm version -o short"
+  register: kubeadm_output
+  changed_when: false
+
+- name: Establecer la versión de la api de kubelet en v1beta1
+  set_fact:
+    kubeletConfig_api_version: v1beta1
+  tags:
+    - kubelet
+    - kubeadm
+
+- name: Escribir el archivo de configuración del entorno de kubelet (kubeadm)
+  template:
+    src: "kubelet.env.{{ kubeletConfig_api_version }}.j2"
+    dest: "{{ kube_config_dir }}/kubelet.env"
+    backup: yes
+  notify: Node | restart kubelet
+  tags:
+    - kubelet
+    - kubeadm
+
+- name: Escribir el archivo de configuración de kubelet
+  template:
+    src: "kubelet-config.{{ kubeletConfig_api_version }}.yaml.j2"
+    dest: "{{ kube_config_dir }}/kubelet-config.yaml"
+  notify: Kubelet | restart kubelet
+  tags:
+    - kubelet
+    - kubeadm
+
+- name: Escribir el archivo init de kubelet systemd
+  template:
+    src: "kubelet.service.j2"
+    dest: "/etc/systemd/system/kubelet.service"
+    backup: "yes"
+  notify: Node | restart kubelet
+  tags:
+    - kubelet
+    - kubeadm
+
+- name: flush_handlers and reload-systemd
+  meta: flush_handlers
+
+- name: Habilitar kubelet
+  service:
+    name: kubelet
+    enabled: yes
+    state: started
+  tags:
+    - kubelet
+  notify: Kubelet | restart kubelet

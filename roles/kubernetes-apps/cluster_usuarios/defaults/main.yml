@@ -1,0 +1,10 @@
+---
+usuario_config_dir: /etc/ssl/usuarios
+usuario_cert_dir: "{{ usuario_config_dir }}/ssl"
+usuario_cert_group: root
+usuario_script_dir: "{{ bin_dir }}/usuario-scripts"
+
+autorizar_namespace: default
+
+podsecuritypolicy_enabled: false
+autorizar_config_dir_temp: /tmp/cert

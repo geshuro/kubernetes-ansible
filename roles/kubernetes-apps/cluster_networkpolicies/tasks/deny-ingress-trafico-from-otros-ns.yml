@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Denegar todo el tráfico de otros namespace | Listar plantillas de politica ingress 
+  set_fact:
+    deny_ingress_trafico_from_otros_ns_templates:
+      - {file: deny-ingress-trafico-from-otros-ns.yaml, type: networkpolicy, name: deny-ingress-trafico-from-otros-ns}
+  when:
+  - networkpolicies.ingress.enabled|default(false)
+  - networkpolicies.ingress.deny_all_trafico_otros_ns.enabled|default(false)
+
+- name: "Kubernetes Apps | Denegar todo el tráfico de otros namespace | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_ingress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico_otros_ns.enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Denegar todo el tráfico de otros namespace | Copiar plantilla network policies ingress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ deny_ingress_trafico_from_otros_ns_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico_otros_ns.enabled|default(false)
+
+- name: Kubernetes Apps | Denegar todo el tráfico de otros namespace | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ networkpolicies.ingress.deny_all_trafico_otros_ns.namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.deny_all_trafico_otros_ns.enabled|default(false)
+    - item.item.name == "deny-ingress-trafico-from-otros-ns"
+    - not item is skipped

@@ -1,0 +1,28 @@
+---
+helm_enabled: false
+
+helm_home_dir: "/root/.helm"
+
+helm_deployment_type: host
+
+tiller_wait: false
+
+helm_skip_refresh: false
+
+tiller_enable_tls: false
+helm_config_dir: "{{ kube_config_dir }}/helm"
+helm_script_dir: "{{ bin_dir }}/helm-scripts"
+
+tiller_secure_release_info: false
+
+helm_tiller_cert_dir: "{{ helm_config_dir }}/ssl"
+tiller_tls_cert: "{{ helm_tiller_cert_dir }}/tiller.pem"
+tiller_tls_key: "{{ helm_tiller_cert_dir }}/tiller-key.pem"
+tiller_tls_ca_cert: "{{ helm_tiller_cert_dir }}/ca.pem"
+
+helm_cert_group: root
+helm_cert_owner: root
+
+tiller_namespace: kube-system
+
+tiller_service_account: tiller

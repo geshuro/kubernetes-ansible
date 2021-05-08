@@ -1,0 +1,172 @@
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: develop-crd-crb
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-crd-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-traefik-ingress-controller-view-rb
+  namespace: microservicios
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: traefik-ingress-controller-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-traefik-ingress-controller-view-rb
+  namespace: microfrontends
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: traefik-ingress-controller-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-role-rolebindings-view-rb
+  namespace: microservicios
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-role-rolebindings-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-role-rolebindings-view-rb
+  namespace: microfrontends
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-role-rolebindings-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-role-rolebindings-edit-rb
+  namespace: microservicios
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-role-rolebindings-edit-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-role-rolebindings-edit-rb
+  namespace: microfrontends
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-role-rolebindings-edit-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: develop-admin-ns-pod-view-cr-crb
+subjects:
+  - kind: User
+    name: develop-admin
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ns-pod-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+#istio inicio
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-gateway-vservice-view-rb
+  namespace: microfrontends
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-gateway-vservice-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-gateway-vservice-edit-rb
+  namespace: microfrontends
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-gateway-vservice-edit-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-gateway-vservice-view-rb
+  namespace: microservicios
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-gateway-vservice-view-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: develop-gateway-vservice-edit-rb
+  namespace: microservicios
+subjects:
+  - kind: Group
+    name: develop
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: develop-gateway-vservice-edit-cr
+  apiGroup: rbac.authorization.k8s.io
+---
+#istio fin
+
+#kubectl label namespace microservicios istio-injection=enabled

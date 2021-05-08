@@ -1,0 +1,38 @@
+---
+- name: "Comprobar vars definidas correctamente"
+  assert:
+    that:
+      - "calico_pool_name is defined"
+      - "calico_pool_name is match('^[a-zA-Z0-9-_\\\\.]{2,63}$')"
+    msg: "calico_pool_name contiene caracteres no válidos"
+
+- name: "Verificar que el backend de la red calico esté definido correctamente"
+  assert:
+    that:
+      - "calico_network_backend in ['bird', 'vxlan', 'none']"
+    msg: "El backend de la red calico no es 'bird', 'vxlan' or 'none'"
+  when:
+    - calico_network_backend is defined
+
+- name: "Verificar el modo ipip y vxlan definidos correctamente"
+  assert:
+    that:
+      - "calico_ipip_mode in ['Always', 'CrossSubnet', 'Never']"
+      - "calico_vxlan_mode in ['Always', 'CrossSubnet', 'Never']"
+    msg: "El modo de encapsulación entre host de calico no es  'Always', 'CrossSubnet' o 'Never'"
+
+- name: "Verificar el modo ipip y vxlan si están habilitados simultáneamente"
+  assert:
+    that:
+      - "calico_vxlan_mode in ['Never']"
+    msg: "IP en modo IP y VXLAN son modos mutuamente exclusivos"
+  when:
+    - "calico_ipip_mode in ['Always', 'CrossSubnet']"
+
+- name: "Verificar el modo ipip y vxlan si están habilitados simultáneamente"
+  assert:
+    that:
+      - "calico_ipip_mode in ['Never']"
+    msg: "IP en modo IP y VXLAN son modos mutuamente exclusivos"
+  when:
+    - "calico_vxlan_mode in ['Always', 'CrossSubnet']"

@@ -1,0 +1,45 @@
+---
+
+- name: Instalar paquetes nfs server
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+      - nfs-utils
+
+- name: Habilitar servicio rpcbind
+  service:
+    name: rpcbind
+    enabled: yes
+
+- name: Habilitar servicio nfs-server
+  service:
+    name: nfs-server
+    enabled: yes
+
+- name: Iniciar servicio nfs-server
+  service:
+    name: nfs-server
+    state: started
+
+- name: Iniciar servicio rpc-statd
+  service:
+    name: rpc-statd
+    state: started
+
+- name: Iniciar servicio nfs-idmapd
+  service:
+    name: nfs-idmapd
+    state: started
+
+- name: Configurar directorios a exportar NFS
+  lineinfile:
+    path: /etc/exports
+    state: present
+    line: "{{ item }}"
+  with_items:
+    - '{{ dir_tools }}  {{ sub_net_destino }}(rw,sync,no_root_squash)'
+    - '{{ dir_disk1 }}  {{ sub_net_destino }}(rw,sync,no_root_squash)'
+
+- name: Actualizar tabla exportacion NFS
+  shell: exportfs -r

@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ networkpolicies.ingress.allow_trafico_solo_un_puerto_app.nombre }}
+spec:
+  podSelector:
+    matchLabels:
+      {{ networkpolicies.ingress.allow_trafico_solo_un_puerto_app.pod_matchlabels | to_nice_yaml(indent=2) | trim | indent(width=6) }}
+  ingress:
+  - ports:
+    - port: {{ networkpolicies.ingress.allow_trafico_solo_un_puerto_app.nro_puerto }}
+    from:
+    - podSelector:
+        matchLabels:
+          {{ networkpolicies.ingress.allow_trafico_solo_un_puerto_app.from_pod_matchlabels | to_nice_yaml(indent=2) | indent(width=10) }}

@@ -1,0 +1,57 @@
+---
+- name: Crear el directorio systemd del servicio Docker si no existe
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+
+- name: Escribir el proxy directo de Docker
+  template:
+    src: http-proxy.conf.j2
+    dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+  notify: restart docker
+  when: http_proxy is defined or https_proxy is defined
+
+- name: Obtener la versión systemd
+  shell: set -o pipefail && systemctl --version | head -n 1 | cut -d " " -f 2
+  args:
+    executable: /bin/bash
+  register: systemd_version
+  when: not is_ostree
+  changed_when: false
+  check_mode: false
+
+- name: Escribir el archivo docker.service systemd
+  template:
+    src: docker.service.j2
+    dest: /etc/systemd/system/docker.service
+  register: docker_service_file
+  notify: restart docker
+
+- name: Escribir opciones docker en directo systemd
+  template:
+    src: docker-options.conf.j2
+    dest: "/etc/systemd/system/docker.service.d/docker-options.conf"
+  notify: restart docker
+
+- name: Escribir docker dns systemd en directo
+  template:
+    src: docker-dns.conf.j2
+    dest: "/etc/systemd/system/docker.service.d/docker-dns.conf"
+  notify: restart docker
+  when: dns_mode != 'none' and resolvconf_mode == 'docker_dns'
+
+- name: Copiar el script de limpieza de Docker huerfanos en el nodo
+  copy:
+    src: cleanup-docker-orphans.sh
+    dest: "{{ bin_dir }}/cleanup-docker-orphans.sh"
+    mode: 0755
+  when: docker_orphan_clean_up | bool
+
+- name: Escribir Docker huérfano systemd de limpieza en directo
+  template:
+    src: docker-orphan-cleanup.conf.j2
+    dest: "/etc/systemd/system/docker.service.d/docker-orphan-cleanup.conf"
+  notify: restart docker
+  when: docker_orphan_clean_up | bool
+
+- meta: flush_handlers

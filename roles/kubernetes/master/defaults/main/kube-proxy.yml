@@ -1,0 +1,122 @@
+---
+# Enlazar dirección para kube-proxy
+kube_proxy_bind_address: '0.0.0.0'
+
+# acceptContentTypes define el encabezado Accept enviado por los clientes cuando se conectan a un servidor, 
+# anulando el valor predeterminado de 'application/json'. 
+# Este campo controlará todas las conexiones al servidor utilizadas por un cliente en particular.
+kube_proxy_client_accept_content_types: ''
+
+# burst permite que se acumulen consultas adicionales cuando un cliente excede su tasa.
+kube_proxy_client_burst: 10
+
+# contentType es el tipo de contenido que se usa al enviar datos al servidor desde este cliente.
+kube_proxy_client_content_type: application/vnd.kubernetes.protobuf
+
+# kubeconfig es la ruta a un archivo KubeConfig.
+# Dejar como cadena vacía para generar desde otros campos
+kube_proxy_client_kubeconfig: ''
+
+# qps controla el número de consultas por segundo permitidas para esta conexión.
+kube_proxy_client_qps: 5
+
+# Frecuencia de actualizacion de la configuración del apiserver. Debe ser mayor que 0.
+kube_proxy_config_sync_period: 15m0s
+
+### Pista de conexión = ConnTrack
+# max es el número máximo de conexiones NAT para rastrear 
+# (0 para dejar como está). Esto tiene prioridad sobre maxPerCore y min.
+kube_proxy_conntrack_max: 'null'
+
+# maxPerCore es el número máximo de conexiones NAT para rastrear por 
+# núcleo de CPU (0 para dejar el límite como está e ignorar el mínimo).
+kube_proxy_conntrack_max_per_core: 32768
+
+# min es el valor mínimo de los registros de seguimiento de conexión
+# para asignar, independientemente de conntrackMaxPerCore (establezca maxPerCore = 0 para dejar el límite como está).
+kube_proxy_conntrack_min: 131072
+
+# tcpCloseWaitTimeout es cuánto tiempo permanecerá 
+# una entrada de conntrack inactiva en el estado CLOSE_WAIT en la tabla conntrack
+# (ejm: '60s'). Debe ser mayor que 0 para configurarlo.
+kube_proxy_conntrack_tcp_close_wait_timeout: 1h0m0s
+
+# tcpEstablishedTimeout is how long an idle TCP connection will be kept open
+# (e.g. '2s').  Must be greater than 0 to set.
+kube_proxy_conntrack_tcp_established_timeout: 24h0m0s
+
+# Habilita la generación de perfiles a través de la interfaz web en el controlador /debug/pprof.
+# Los controladores de generación de perfiles serán manejados por metrics server.
+kube_proxy_enable_profiling: false
+
+# Enlazar la dirección para la verificación de estado de kube-proxy
+kube_proxy_healthz_bind_address: 0.0.0.0:10256
+
+# Si usa el proxy iptables puro, todo SNAT. 
+# Tenga en cuenta que rompe cualquier motor de políticas.
+kube_proxy_masquerade_all: false
+
+# Si usa el proxy iptables puro, el bit del espacio fwmark para marcar los paquetes que requieren SNAT, 
+# debe estar dentro del rango [0, 31].
+kube_proxy_masquerade_bit: 14
+
+# El intervalo mínimo de la frecuencia con la que se pueden actualizar las reglas iptables o ipvs a 
+# medida que cambian los endpoints y los servicios. (ejm: '5s', '1m', '2h22m').
+kube_proxy_min_sync_period: 0s
+
+# El intervalo máximo de la frecuencia con la que se actualizan las reglas de iptables o ipvs (ejm: '5s', '1m', '2h22m').
+# Debe ser mayor que 0.
+kube_proxy_sync_period: 30s
+
+# Una lista separada por comas de CIDR que el proxy de ipvs no debe tocar al limpiar las reglas de IPVS.
+kube_proxy_exclude_cidrs: []
+
+# El tipo ipvs scheduler cuando el modo proxy es ipvs
+# rr: round-robin
+# lc: least connection
+# dh: destination hashing
+# sh: source hashing
+# sed: shortest expected delay
+# nq: never queue
+kube_proxy_scheduler: rr
+
+# configurar arp_ignore y arp_announce para evitar responder consultas ARP desde la interfaz kube-ipvs0 
+# debe establecerse en true para que MetalLB funcione
+kube_proxy_strict_arp: false
+
+# kube_proxy_tcp_timeout es el valor de tiempo de espera que se utiliza para las sesiones TCP IPVS inactivas.
+# El valor predeterminado es 0, que conserva el valor de tiempo de espera actual en el sistema.
+kube_proxy_tcp_timeout: 0s
+
+# kube_proxy_tcp_fin_timeout es el valor de tiempo de espera que se usa para las sesiones IPVS TCP después de recibir un "FIN".
+# El valor predeterminado es 0, que conserva el valor de tiempo de espera actual en el sistema.
+kube_proxy_tcp_fin_timeout: 0s
+
+# kube_proxy_udp_timeout es el valor de tiempo de espera que se utiliza para los paquetes IPVS UDP.
+# El valor predeterminado es 0, que conserva el valor de tiempo de espera actual en el sistema.
+kube_proxy_udp_timeout: 0s
+
+# La dirección IP y el puerto para que metrics server funcione
+# (set to 0.0.0.0 para todas interfaces IPv4 y `::` para todas las interfaces IPv6)
+kube_proxy_metrics_bind_address: 127.0.0.1:10249
+
+# Un segmento de cadena de valores que especifica las direcciones que se utilizarán para NodePorts.
+# Los valores pueden ser bloques de IP válidos(ejm: 1.2.3.0/24, 1.2.3.4/32).
+# El segmento de cadena vacía predeterminado ([]) significa utilizar todas las direcciones locales.
+kube_proxy_nodeport_addresses: >-
+  {%- if kube_proxy_nodeport_addresses_cidr is defined -%}
+  [{{ kube_proxy_nodeport_addresses_cidr }}]
+  {%- else -%}
+  []
+  {%- endif -%}
+
+# Valor de oom-score-adj para el proceso de kube-proxy. Los valores deben estar dentro del rango [-1000, 1000]
+kube_proxy_oom_score_adj: -999
+
+# portRange es el rango de puertos de host (beginPort-endPort, inclusive) que se pueden consumir 
+# para el tráfico del servicio proxy. Si no se especifica, 0 o (0-0), los puertos se elegirán al azar.
+kube_proxy_port_range: ''
+
+# udpIdleTimeout es cuánto tiempo se mantendrá abierta una conexión UDP inactiva (ejm: '250ms', '2s').
+# Debe ser mayor que 0. Solo aplicable para proxyMode = userspace.
+kube_proxy_udp_idle_timeout: 250ms

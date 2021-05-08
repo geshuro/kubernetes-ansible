@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Permitir el tráfico de algunos pods en otro namespace | Listar plantillas de politica ingress 
+  set_fact:
+    allow_ingress_trafico_desde_algunas_app_en_otros_ns_templates:
+      - {file: allow-ingress-trafico-desde-algunas-app-en-otros-ns.yaml, type: networkpolicy, name: allow-ingress-trafico-desde-algunas-app-en-otros-ns}
+  when:
+  - networkpolicies.ingress.enabled|default(false)
+  - networkpolicies.ingress.allow_trafico_algunos_ns_a_app.enabled|default(false)
+
+- name: "Kubernetes Apps | Permitir el tráfico de algunos pods en otro namespace | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_ingress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_algunos_ns_a_app.enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Permitir el tráfico de algunos pods en otro namespace | Copiar plantilla network policies ingress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ allow_ingress_trafico_desde_algunas_app_en_otros_ns_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_algunos_ns_a_app.enabled|default(false)
+
+- name: Kubernetes Apps | Permitir el tráfico de algunos pods en otro namespace | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ networkpolicies.ingress.allow_trafico_algunos_ns_a_app.namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies.ingress.allow_trafico_algunos_ns_a_app.enabled|default(false)
+    - item.item.name == "allow-ingress-trafico-desde-algunas-app-en-otros-ns"
+    - not item is skipped

@@ -1,0 +1,4 @@
+---
+- include_tasks: "gen_certs_script.yml"
+
+- include_tasks: "autorizacion.yml"

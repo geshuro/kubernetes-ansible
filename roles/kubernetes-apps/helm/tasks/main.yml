@@ -1,0 +1,26 @@
+---
+- name: Helm | Asegurar que exista el directorio HELM_HOME
+  file: path={{ helm_home_dir }} state=directory
+
+- name: Helm | Configurar el helm launcher
+  include_tasks: "install_{{ helm_deployment_type }}.yml"
+
+- name: Helm | Agregar/actualizar repositorio estable en todos los maestros
+  command: "{{ bin_dir }}/helm repo add stable {{ helm_stable_repo_url }}"
+  environment: "{{ proxy_env }}"
+  when:
+    - helm_version is version('v3.0.0', '>=')
+    - helm_stable_repo_url is defined
+
+- name: Asegurar que la carpeta bash_completion.d exista
+  file:
+    name: "/etc/bash_completion.d/"
+    state: directory
+  when:
+    - ((helm_container is defined and helm_container.changed) or (helm_task_result is defined and helm_task_result.changed))
+    - ansible_os_family in ["ClearLinux"]
+
+- name: Helm | Configurar la finalización de bash
+  shell: "umask 022 && {{ bin_dir }}/helm completion bash >/etc/bash_completion.d/helm.sh"
+  when:
+    - ((helm_container is defined and helm_container.changed) or (helm_task_result is defined and helm_task_result.changed))

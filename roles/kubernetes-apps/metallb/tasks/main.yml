@@ -1,0 +1,74 @@
+---
+- name: "Kubernetes Apps | Comprobar la configuración del clúster para MetalLB"
+  fail:
+    msg: "MetalLB requiere kube_proxy_strict_arp = true, consulte https://github.com/danderson/metallb/issues/153#issuecomment-518651132"
+  when:
+    - "kube_proxy_mode == 'ipvs' and not kube_proxy_strict_arp"
+
+- name: Kubernetes Apps | Comprobar la configuración del clúster para MetalLB
+  fail:
+    msg: "metallb_ip_range es mandatorio para especificar a MetalLB"
+  when:
+    - metallb_ip_range is not defined or not metallb_ip_range
+
+- name: Kubernetes Apps | Comprobar los pares de BGP para MetalLB
+  fail:
+    msg: "metallb_peers es mandatorio cuando metallb_protocol es bgp"
+  when:
+    - metallb_protocol == 'bgp' and metallb_peers is not defined
+
+- name: Kubernetes Apps | Comprobar estado de AppArmor
+  command: which apparmor_parser
+  register: apparmor_status
+  when:
+    - podsecuritypolicy_enabled
+    - inventory_hostname == groups['kube-master'][0]
+  failed_when: false
+
+- name: Kubernetes Apps | Establecer apparmor_enabled
+  set_fact:
+    apparmor_enabled: "{{ apparmor_status.rc == 0 }}"
+  when:
+    - podsecuritypolicy_enabled
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: "Kubernetes Apps | Copiar archivos MetalLB"
+  become: true
+  template: { src: "{{ item }}.j2", dest: "{{ kube_config_dir }}/{{ item }}" }
+  with_items: ["metallb.yml", "metallb-config.yml"]
+  register: "rendering"
+  when:
+    - "inventory_hostname == groups['kube-master'][0]"
+
+- name: "Kubernetes Apps | Instalar y configurar MetalLB"
+  kube:
+    name: "MetalLB"
+    kubectl: "{{ bin_dir }}/kubectl"
+    filename: "{{ kube_config_dir }}/{{ item.item }}"
+    state: "{{ item.changed | ternary('latest','present') }}"
+  become: true
+  with_items: "{{ rendering.results }}"
+  when:
+    - "inventory_hostname == groups['kube-master'][0]"
+
+- name: Kubernetes Apps | Verificar si existe secreto de MetalLB
+  command: "{{ bin_dir }}/kubectl --kubeconfig /etc/kubernetes/admin.conf -n metallb-system get secret memberlist"
+  register: metallb_secret
+  become: true
+  ignore_errors: yes
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+
+- name: Kubernetes Apps | Crear random bytes para MetalLB
+  command: "openssl rand -base64 32"
+  register: metallb_rand
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - metallb_secret.rc != 0
+
+- name: Kubernetes Apps | Instalar secreto de MetalLB si no existe
+  command: "{{ bin_dir }}/kubectl --kubeconfig /etc/kubernetes/admin.conf -n metallb-system create secret generic memberlist --from-literal=secretkey={{ metallb_rand.stdout }}"
+  become: true
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - metallb_secret.rc != 0

@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Denegar todo el tráfico no incluido en la lista blanca de un namespace | Listar plantillas de politica egress 
+  set_fact:
+    deny_egress_all_trafico_de_ns_templates:
+      - {file: deny-egress-all-trafico-de-ns.yaml, type: networkpolicy, name: deny-egress-all-trafico-de-ns}
+  when:
+  - networkpolicies.egress.enabled|default(false)
+  - networkpolicies.egress.deny_all_trafico_ns.enabled|default(false)
+
+- name: "Kubernetes Apps | Denegar todo el tráfico no incluido en la lista blanca de un namespace | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_egress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.egress.enabled|default(false)
+    - networkpolicies.egress.deny_all_trafico_ns.enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Denegar todo el tráfico no incluido en la lista blanca de un namespace | Copiar plantilla network policies egress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_egress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ deny_egress_all_trafico_de_ns_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.egress.enabled|default(false)
+    - networkpolicies.egress.deny_all_trafico_ns.enabled|default(false)
+
+- name: Kubernetes Apps | Denegar todo el tráfico no incluido en la lista blanca de un namespace | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ networkpolicies.egress.deny_all_trafico_ns.namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_egress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.egress.enabled|default(false)
+    - networkpolicies.egress.deny_all_trafico_ns.enabled|default(false)
+    - item.item.name == "deny-egress-all-trafico-de-ns"
+    - not item is skipped

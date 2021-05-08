@@ -1,0 +1,20 @@
+---
+## Retener con compactación automática etcd para almacenamiento de key value de mvcc en una hora
+# etcd_compaction_retention: 0
+
+## Establecer el nivel de detalle para las métricas exportadas de etcd, especifique 'extensive' para incluir métricas de histograma.
+# etcd_metrics: basic
+
+## Configurar esto si sus nodos etcd tienen menos de 4GB pero desea más RAM para etcd. Establecer en 0 para RAM sin restricciones.
+etcd_memory_limit: "0"
+
+## Etcd tiene un valor predeterminado de 2G para su cuota de espacio. Si pones un valor en etcd_memory_limit que es menor que
+## etcd_quota_backend_bytes, puede encontrar terminaciones sin memoria del clúster etcd.
+# etcd_quota_backend_bytes: "2147483648"
+
+### ETCD: deshabilitar la autenticación de certificado de cliente par.
+# Esto afecta a la variable ETCD_PEER_CLIENT_CERT_AUTH
+etcd_peer_client_auth: true
+
+## Configuración para el tipo de implementación de etcd
+etcd_deployment_type: docker

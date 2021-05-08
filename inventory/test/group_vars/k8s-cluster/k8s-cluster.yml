@@ -1,0 +1,240 @@
+---
+# Directorio de configuración de Kubernetes y namespace system.
+# Aquí es donde van todas las cosas de configuración adicionales
+# que kubernetes normalmente pone en /srv/kubernetes.
+kube_config_dir: /etc/kubernetes
+kube_script_dir: "{{ bin_dir }}/kubernetes-scripts"
+kube_manifest_dir: "{{ kube_config_dir }}/manifests"
+
+# Ubicacion de todos los scripts de certificados y archivos certificados.
+kube_cert_dir: "{{ kube_config_dir }}/ssl"
+
+# Ubicacion de almacenamiento de todos los bearer tokens.
+kube_token_dir: "{{ kube_config_dir }}/tokens"
+
+#kube_api_anonymous_auth: true
+#Recomendacion seguridad consorcio
+#kube_api_anonymous_auth: false
+#Porque no existe metodo de autenticacion externa a k8s
+kube_api_anonymous_auth: true 
+
+
+## Cambiar esto para usar otra versión de Kubernetes
+kube_version: v1.18.0
+
+# Carpeta donde se descargarán los binarios.
+# Asegurar de tener suficiente espacio en disco (recomendacion 1G)
+local_release_dir: "/tmp/releases"
+# Numero de reitentos de operaciones fallidas de descargas o subidas.
+retry_stagger: 5
+
+# Grupo al que los scripts de creación de certificados envían los archivos de certificados
+kube_cert_group: kube-cert
+
+# Configuracion de nivel de log del cluster
+kube_log_level: 2
+
+# Directorio donde se almacenarán las credenciales
+credentials_dir: "{{ inventory_dir }}/credentials"
+
+# Tipo de Network plugin
+kube_network_plugin: calico
+
+# Kubernetes internal network para services, bloque de espacio no utilizado.
+kube_service_addresses: 10.233.0.0/18
+
+# Internal network. Cuando se usa, asignará direcciones IP de este rango a pods individuales.
+kube_pods_subnet: 10.233.64.0/18
+
+kube_network_node_prefix: 24
+
+# El puerto en el que escuchará el API server.
+kube_apiserver_ip: "{{ kube_service_addresses|ipaddr('net')|ipaddr(1)|ipaddr('address') }}"
+kube_apiserver_port: 6443  # https
+# Establecer en 0 para deshabilitar el puerto inseguro - Requiere RBAC en authorization_modes y kube_api_anonymous_auth: true
+kube_apiserver_insecure_port: 0  # (deshabilitado)
+#kube_apiserver_insecure_port: 8080  # (http)
+
+# Realizar compatibilidad de kube-proxy con K8s
+kube_proxy_compatible: true
+# Imagen compatible con K8s v1.18
+kube_proxy_image_tag: v1.17.6
+# Configuración de proxyMode de Kube-proxy.
+kube_proxy_mode: ipvs
+
+# Configurar arp_ignore and arp_announce to avoid answering ARP queries from kube-ipvs0 interface
+# must be set to true for MetalLB to work
+kube_proxy_strict_arp: false
+
+
+# Un segmento de cadena de valores que especifica las direcciones que se utilizarán para NodePorts.
+# Los valores pueden ser bloques de IP válidos (e.g. 1.2.3.0/24, 1.2.3.4/32).
+# El segmento de cadena vacía predeterminado ([]) significa utilizar todas las direcciones locales.
+# kube_proxy_nodeport_addresses_cidr se conserva para la configuración heredada
+kube_proxy_nodeport_addresses: >-
+  {%- if kube_proxy_nodeport_addresses_cidr is defined -%}
+  [{{ kube_proxy_nodeport_addresses_cidr }}]
+  {%- else -%}
+  []
+  {%- endif -%}
+
+
+## Encriptación de datos secretos en reposo (experimental)
+kube_encrypt_secret_data: false
+
+# DNS configuracion.
+# El nombre del clúster de Kubernetes, también se utilizará como dominio DNS
+cluster_name: kubernetes.local
+# Los subdominios del dominio DNS se resolverán a través de /etc/resolv.conf para los pods de hostnet
+ndots: 2
+# Puede ser coredns, coredns_dual, manual o ninguna
+dns_mode: coredns
+# Configure el servidor manual si usa un servidor DNS de clúster personalizado
+# manual_dns_server: 10.x.x.x
+# Habilitar la caché dns de nodelocal
+#enable_nodelocaldns: false
+enable_nodelocaldns: true
+nodelocaldns_ip: 169.254.25.10
+nodelocaldns_health_port: 9254
+# nodelocaldns_external_zones:
+# - zones:
+#   - example.com
+#   - example.io:1053
+#   nameservers:
+#   - 1.1.1.1
+#   - 2.2.2.2
+#   cache: 5
+# - zones:
+#   - https://mycompany.local:4453
+#   nameservers:
+#   - 192.168.0.53
+#   cache: 0
+# Habilitar el complemento k8s_external para CoreDNS
+enable_coredns_k8s_external: false
+coredns_k8s_external_zone: k8s_external.local
+# Habilitar la opcion endpoint_pod_names para kubernetes plugin
+enable_coredns_k8s_endpoint_pod_names: false
+
+# Puede ser docker_dns, host_resolvconf o ninguna
+resolvconf_mode: docker_dns
+# Implemente la aplicación netchecker para verificar que el DNS se resuelva como un servicio HTTP
+deploy_netchecker: false
+#deploy_netchecker: false
+# Dirección ip del servicio de skydns de kubernetes
+skydns_server: "{{ kube_service_addresses|ipaddr('net')|ipaddr(3)|ipaddr('address') }}"
+skydns_server_secondary: "{{ kube_service_addresses|ipaddr('net')|ipaddr(4)|ipaddr('address') }}"
+dns_domain: "{{ cluster_name }}"
+
+## Container runtime
+## docker for docker
+container_manager: docker
+# Configuración para el tiempo de ejecución en contenedor que no es de confianza
+# containerd_untrusted_runtime_type: ''
+# containerd_untrusted_runtime_engine: ''
+# containerd_untrusted_runtime_root: ''
+
+helm_deployment_type: host
+
+kubeadm_certificate_key: "{{ lookup('password', credentials_dir + '/kubeadm_certificate_key.creds length=64 chars=hexdigits') | lower }}"
+
+# Politica de K8s image pull (imagePullPolicy)
+k8s_image_pull_policy: IfNotPresent
+
+# auditoria log de kubernetes
+kubernetes_audit: false
+
+# Configrar dinamiecamente kubelet 
+dynamic_kubelet_configuration: false
+
+# Definir el directorio de configuración de kubelet para kubelet dinámico
+# kubelet_config_dir:
+default_kubelet_config_dir: "{{ kube_config_dir }}/dynamic_kubelet_dir"
+dynamic_kubelet_configuration_dir: "{{ kubelet_config_dir | default(default_kubelet_config_dir) }}"
+
+# Política de seguridad del pod (RBAC debe estar habilitado ya sea teniendo 'RBAC' en modo de autorización o kubeadm habilitado)
+#Recomendacion seguridad consorcio
+podsecuritypolicy_enabled: true
+#podsecuritypolicy_enabled: true
+
+# Especificación personalizada de PodSecurityPolicy para política restringida
+# podsecuritypolicy_restricted_spec: {}
+
+# Especificación personalizada de PodSecurityPolicy para políticas privilegiadas
+# podsecuritypolicy_privileged_spec: {}
+
+# Haga una copia de kubeconfig en el host que ejecuta Ansible en {{ inventory_dir }}/artifacts
+# kubeconfig_localhost: false
+# Descargue kubectl en el host que ejecuta Ansible en {{ bin_dir }}
+# kubectl_localhost: false
+
+# Una lista separada por comas de niveles de aplicación asignable de nodos que kubelet aplicará.
+# Las opciones aceptables son 'pods', 'system-reserved', 'kube-reserved' y ''. Default is "".
+# kubelet_enforce_node_allocatable: pods
+
+## Opcionalmente, reserve recursos para los demonios del sistema operativo.
+# system_reserved: true
+## Descomentar para anular los valores predeterminados
+# system_memory_reserved: 512Mi
+# system_cpu_reserved: 500m
+## Reserva para host maestros
+# system_master_memory_reserved: 256Mi
+# system_master_cpu_reserved: 250m
+
+# Un directorio de complementos de flexvolume alternativo
+# kubelet_flexvolumes_plugins_dir: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+
+## Direcciones complementarias que se pueden agregar en las claves ssl de kubernetes.
+## Eso puede ser útil, por ejemplo, para configurar una IP virtual viva
+# supplementary_addresses_in_ssl_keys: [10.0.0.1, 10.0.0.2, 10.0.0.3]
+
+## Admite la versión mínima de tls, valores posibles: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+# tls_min_version: ""
+
+## Soporta conjuntos de cifrado tls.
+# tls_cipher_suites: {}
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
+#   - TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_RSA_WITH_RC4_128_SHA
+#   - TLS_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_RSA_WITH_RC4_128_SHA
+
+## Cantidad de tiempo para retener eventos. (default 1h0m0s)
+event_ttl_duration: "1h0m0s"
+##  Forzar la regeneración de los certificados del control plane de Kubernetes sin necesidad de modificar la versión del clúster
+force_certificate_regeneration: false
+#Recomendacion seguridad consorcio
+eventratelimit_enabled: true
+# Ubicacion de manifiestos de EventRateLimit
+kube_eventratelimit_dir: "{{ kube_config_dir }}/eventratelimit"
+kube_apiserver_enable_admission_plugins: >-
+  {%- if eventratelimit_enabled -%}
+  {{ ['NodeRestriction', 'MutatingAdmissionWebhook'] | union(['EventRateLimit']) | unique }}
+  {%- else -%}
+  ['NodeRestriction']
+  {%- endif -%}
+kube_apiserver_admission_control_config: ["{{ kube_eventratelimit_dir }}/admission-configuration.yaml"]
+kube_apiserver_admission_eventratelimit_file: "{{ kube_eventratelimit_dir }}/event-rate-limit.yaml"
+## Montajes de volumen de host de control plane adicional
+apiserver_extra_volumes: >-
+  {%- if eventratelimit_enabled -%}
+  [{'name': 'eventratelimit', 'hostPath': '{{ kube_eventratelimit_dir }}', 'mountPath': '{{ kube_eventratelimit_dir }}', 'readOnly': True}]
+  {%- else -%}
+  []
+  {%- endif -%}

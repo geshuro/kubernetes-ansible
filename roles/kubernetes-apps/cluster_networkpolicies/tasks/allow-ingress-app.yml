@@ -1,0 +1,51 @@
+---
+
+- name: Kubernetes Apps | Permitir todo el tráfico a una aplicación | Listar plantillas de politica ingress 
+  set_fact:
+    allow_ingress_app_templates:
+      - {file: allow-ingress-app.yaml, type: networkpolicy, name: allow-ingress-app}
+  when:
+  - networkpolicies.ingress.enabled|default(false)
+  - networkpolicies_ingress_allow_all_trafico_enabled|default(false)
+
+- name: "Kubernetes Apps | Permitir todo el tráfico a una aplicación | Crear directorio para manifiesto (en {{ groups['kube-master'][0] }})"
+  file:
+    path: "{{ networkpolicies_ingress_config_dir_temp }}"
+    group: "{{ usuario_networkpolicies_group }}"
+    state: directory
+    owner: kube
+    recurse: yes
+    mode: 0700
+  run_once: yes
+  when: 
+    - inventory_hostname == groups['kube-master'][0] 
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies_ingress_allow_all_trafico_enabled|default(false)
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- name: Kubernetes Apps | Permitir todo el tráfico a una aplicación | Copiar plantilla network policies ingress
+  template:
+    src: "{{ item.file }}.j2"
+    dest: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.file }}"
+  with_items: "{{ allow_ingress_app_templates }}"
+  register: manifests
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies_ingress_allow_all_trafico_enabled|default(false)
+
+- name: Kubernetes Apps | Permitir todo el tráfico a una aplicación | Ejecutar politica
+  kube:
+    name: "{{ item.item.name }}"
+    namespace: "{{ allow_all_trafico_namespace }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.item.type }}"
+    filename: "{{ networkpolicies_ingress_config_dir_temp }}/{{ item.item.file }}"
+    state: "latest"
+  with_items: "{{ manifests.results }}"
+  when:
+    - inventory_hostname == groups['kube-master'][0]
+    - networkpolicies.ingress.enabled|default(false)
+    - networkpolicies_ingress_allow_all_trafico_enabled|default(false)
+    - item.item.name == "allow-ingress-app"
+    - not item is skipped

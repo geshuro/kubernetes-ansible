@@ -1,0 +1,53 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: "Configurar variable entorno de proxy"
+      set_fact:
+        proxy_env:
+          http_proxy: "{{ http_proxy | default ('') }}"
+          HTTP_PROXY: "{{ http_proxy | default ('') }}"
+          https_proxy: "{{ https_proxy | default ('') }}"
+          HTTPS_PROXY: "{{ https_proxy | default ('') }}"
+          no_proxy: "{{ no_proxy | default ('') }}"
+          NO_PROXY: "{{ no_proxy | default ('') }}"
+      no_log: true
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: ansiblerole-defaults}
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"]}
+
+- name: Reunir datos
+  import_playbook: facts.yml
+
+- hosts: tools1:tools2:tools3
+  gather_facts: False
+  vars_prompt:
+    name: "confirmar"
+    prompt: "Estas seguro de iniciar cliente NFS? Escriba 'si' para iniciar."
+    default: "no"
+    private: no
+
+  pre_tasks:
+    - name: comprobar la confirmación
+      fail:
+        msg: "Configuracion cliente NFS fue abortado"
+      when: confirmar != "si"
+
+  roles:
+    - { role: ansiblerole-defaults}
+    - role: nfs-cliente
+      tags: nfs-cliente
+      vars:
+        nfs_cliente: true
+        nfs_cliente_tools: true
+        nfs_cliente_disk1: false
+        dir_tools: "/shared/tools"
+        dir_disk1: "/shared/disk1"
+        ip_nfs_server: 172.28.12.240

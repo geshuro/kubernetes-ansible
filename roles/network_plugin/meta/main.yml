@@ -1,0 +1,11 @@
+---
+dependencies:
+  - role: network_plugin/calico
+    when: kube_network_plugin == 'calico'
+    tags:
+      - calico
+
+  - role: network_plugin/cni
+    when: kube_network_plugin in ['cni']
+    tags:
+      - cni

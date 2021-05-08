@@ -1,0 +1,80 @@
+#!/bin/bash
+
+set -o errexit
+set -o pipefail
+
+usage()
+{
+    cat << EOF
+Crea certificados
+
+Usage : $(basename $0) -f <config> [-d <ssldir>]
+      -h | --help         : Show this message
+      -s | --ssldir       : Directorio donde se instalara el certificado
+      -u | --usuario      : Usuario del certificado
+      -g | --grupo        : Grupo de usuario del certificado
+      -d | --dias         : Cantidad de dias de vigencia del certificado
+EOF
+}
+
+# Análisis de opciones
+while (($#)); do
+    case "$1" in
+        -h | --help)   usage;   exit 0;;
+        -s | --ssldir) SSLDIR="${2}"; shift 2;;
+		-u | --usuario) USUARIO="${2}"; shift 2;;
+		-g | --grupo) GRUPO="${2}"; shift 2;;
+		-d | --dias) DIAS="${2}"; shift 2;;
+        *)
+            usage
+            echo "ERROR : Unknown option"
+            exit 3
+        ;;
+    esac
+done
+
+if [ -z ${SSLDIR} ]; then
+    SSLDIR="/etc/ssl/usuarios/ssl"
+fi
+
+tmpdir=$(mktemp -d /tmp/usuario_cacert.XXXXXX)
+trap 'rm -rf "${tmpdir}"' EXIT
+cd "${tmpdir}"
+
+mkdir -p "${SSLDIR}"
+
+# Root CA
+if [ -e "$SSLDIR/ca.key" ]; then
+    # Reusar si existe CA
+    cp $SSLDIR/{ca.key,ca.crt} .
+else
+	cp /etc/kubernetes/ssl/ca.crt $SSLDIR/ca.crt
+    cp /etc/kubernetes/ssl/ca.key $SSLDIR/ca.key
+
+    cp $SSLDIR/{ca.key,ca.crt} .   
+fi
+
+gen_key_and_cert() {
+    local usuario=$1
+    local subject=$2
+    local dias=$3
+    openssl genrsa -out ${usuario}.key 2048 > /dev/null 2>&1
+    openssl req -new -key ${usuario}.key -out ${usuario}.csr -subj "${subject}" > /dev/null 2>&1
+    openssl x509 -req -in ${usuario}.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out ${usuario}.crt -days ${dias} > /dev/null 2>&1
+}
+
+
+#Generar cert y key para usuario si no existe o actualizar
+if [ -e "$SSLDIR/${USUARIO}.crt" ]; then
+	rm -f "${USUARIO}.crt" "${USUARIO}.key" "${USUARIO}.csr"
+    gen_key_and_cert ${USUARIO} "/CN=${USUARIO}/O=${GRUPO}" ${DIAS}
+else
+	gen_key_and_cert ${USUARIO} "/CN=${USUARIO}/O=${GRUPO}" ${DIAS}
+fi
+
+
+# Asegurar certificado al primer master
+mv "${USUARIO}.crt" ${SSLDIR}/
+mv "${USUARIO}.key" ${SSLDIR}/
+
+rm -f ca.key ca.crt

@@ -1,0 +1,29 @@
+---
+
+- name: Crear carpeta /var/lib/ sino existe
+  file:
+    path: /var/lib/
+    state: directory
+    mode: '0755'
+
+- name: Crear carpeta /var/lib/docker con permisos
+  file:
+    path: /var/lib/docker
+    state: directory
+    owner: root
+    group: root
+    mode: '711'
+
+- name: Crear un xfs filesystem en /dev/xvdb
+  filesystem:
+    fstype: xfs
+    dev: /dev/xvdb
+
+- name: Montar /var/lib/docker en /dev/xvdb
+  mount:
+    path: /var/lib/docker
+    src: /dev/xvdb
+    fstype: xfs
+    state: mounted
+
+

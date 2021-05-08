@@ -1,0 +1,5 @@
+---
+
+- import_tasks: 0010-nfs-cliente.yml
+  when:
+    - nfs_cliente

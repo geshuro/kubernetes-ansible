@@ -1,0 +1,210 @@
+---
+# Deshabilitar actualización del clúster
+upgrade_cluster_setup: false
+
+# Modo de implementación experimental de kubeadm etcd. Disponible solo para nuevas implementaciones
+etcd_kubeadm_enabled: false
+
+# Cambiar a 0.0.0.0 para habilitar el acceso inseguro desde cualquier lugar (no recomendado)
+kube_apiserver_insecure_bind_address: 127.0.0.1
+
+# De forma predeterminada, la API externa escucha en todas las interfaces, 
+# esto se puede cambiar para escuchar en una address/interface específica.
+kube_apiserver_bind_address: 0.0.0.0
+
+# Un rango de puertos para reservar para servicios con visibilidad NodePort.
+# Incluido en ambos extremos del rango.
+kube_apiserver_node_port_range: "30000-32767"
+
+# Backend de ETCD para datos de k8s
+kube_apiserver_storage_backend: etcd3
+
+kube_etcd_cacert_file: ca.pem
+kube_etcd_cert_file: node-{{ inventory_hostname }}.pem
+kube_etcd_key_file: node-{{ inventory_hostname }}-key.pem
+
+# Las interfaces asociadas deben ser accesibles por el resto del clúster y por CLI/web clients
+#Recomendacion seguridad consorcio
+kube_controller_manager_bind_address: 127.0.0.1
+kube_scheduler_bind_address: 127.0.0.1
+#kube_controller_manager_bind_address: 0.0.0.0
+#kube_scheduler_bind_address: 0.0.0.0
+
+# Duraciones y tiempos de espera de la concesión de elección de líder para el programador y el controlador-administrador
+kube_controller_manager_leader_elect_lease_duration: 15s
+kube_controller_manager_leader_elect_renew_deadline: 10s
+
+kube_scheduler_leader_elect_lease_duration: 15s
+kube_scheduler_leader_elect_renew_deadline: 10s
+
+# discovery_timeout modifica el tiempo de espera de descubrimiento
+discovery_timeout: 5m0s
+
+# Instruir al primer maestro para actualizar el token kubeadm
+kubeadm_refresh_token: true
+
+# Reduzca las réplicas de coredns a 0 si no usa coredns dns_mode
+kubeadm_scale_down_coredns_enabled: true
+
+# soporte de auditoria
+kubernetes_audit: false
+# ruta al archivo de registro de auditoría
+audit_log_path: /var/log/audit/kube-apiserver-audit.log
+# número de días
+audit_log_maxage: 30
+# la cantidad de registros de auditoría para retener
+audit_log_maxbackups: 1
+# el tamaño máximo en MB para retener
+audit_log_maxsize: 100
+# archivo de política
+audit_policy_file: "{{ kube_config_dir }}/audit-policy/apiserver-audit-policy.yaml"
+# reglas de política de auditoría personalizadas (para reemplazar las predeterminadas)
+# audit_policy_custom_rules: |
+#   - level: None
+#     users: []
+#     verbs: []
+#     resources: []
+
+# ruta de host del registro de auditoría
+audit_log_name: audit-logs
+audit_log_hostpath: /var/log/kubernetes/audit
+audit_log_mountpath: "{{ audit_log_path | dirname }}"
+
+# ruta de host de política de auditoría
+audit_policy_name: audit-policy
+audit_policy_hostpath: "{{ audit_policy_file | dirname }}"
+audit_policy_mountpath: "{{ audit_policy_hostpath }}"
+
+# auditoría de soporte de webhook
+kubernetes_audit_webhook: false
+
+# ruta para auditar el archivo de configuración del webhook
+audit_webhook_config_file: "{{ kube_config_dir }}/audit-policy/apiserver-audit-webhook-config.yaml"
+audit_webhook_server_url: "https://audit.app"
+audit_webhook_server_extra_args: {}
+audit_webhook_mode: batch
+audit_webhook_batch_max_size: 100
+audit_webhook_batch_max_wait: 1s
+
+kube_controller_node_monitor_grace_period: 40s
+kube_controller_node_monitor_period: 5s
+kube_controller_pod_eviction_timeout: 5m0s
+#Defecto K8s
+#kube_controller_terminated_pod_gc_threshold: 12500
+#Recomendacion seguridad consorcio
+#Recomendacion Rancher
+kube_controller_terminated_pod_gc_threshold: 1000
+kube_apiserver_request_timeout: "1m0s"
+
+# 1.10+ complementos de admisión
+#kube_apiserver_enable_admission_plugins: []
+#Recomendacion seguridad consorcio
+#kube_apiserver_enable_admission_plugins: ["EventRateLimit","PodSecurityPolicy"]
+#kube_apiserver_enable_admission_plugins: ["NodeRestriction","EventRateLimit"]
+kube_apiserver_enable_admission_plugins: ["NodeRestriction"]
+kube_eventratelimit_dir: "{{ kubelet_config_dir }}/eventratelimit"
+kube_apiserver_admission_control_config: ["{{ kube_eventratelimit_dir }}/admission-configuration.yaml"]
+kube_apiserver_admission_eventratelimit_file: "{{ kube_eventratelimit_dir }}/event-rate-limit.yaml"
+# 1.10+ lista de complementos de admisión deshabilitados
+kube_apiserver_disable_admission_plugins: []
+
+# configuración de tiempo de ejecución adicional
+kube_api_runtime_config: []
+
+## Habilitar/deshabilitar los métodos de autenticación del Kube API Server 
+#Recomendacion seguridad consorcio
+kube_token_auth: false
+#kube_oidc_auth: false
+#Recomendacion seguridad consorcio
+#kube_oidc_auth: true
+kube_oidc_auth: false
+kube_webhook_token_auth: false
+kube_webhook_token_auth_url_skip_tls_verify: false
+## Variables para la autenticación del token de webhook
+# kube_webhook_token_auth_url: https://...
+kube_webhook_authorization: false
+## Variables para la autenticación del token de webhook
+# kube_webhook_authorization_url: https://...
+kube_webhook_authorization_url_skip_tls_verify: false
+
+
+## Variables para la configuración de OpenID Connect
+## Para usar OpenID, debe implementar un proveedor de OpenID adicional(e.g Dex, Keycloak, ...)
+
+# kube_oidc_url: https:// ...
+# kube_oidc_client_id: kubernetes
+## Configuraciones opcionales para OIDC
+# kube_oidc_username_claim: sub
+# kube_oidc_username_prefix: oidc:
+# kube_oidc_groups_claim: groups
+# kube_oidc_groups_prefix: oidc:
+# Copie el archivo oidc CA en la siguiente ruta si es necesario
+# kube_oidc_ca_file: {{ kube_cert_dir }}/ca.pem
+# Opcionalmente, incluya un certificado de CA oidc codificado en base64
+# kube_oidc_ca_cert: c3RhY2thYnVzZS5jb20...
+
+# Lista de los NodeAddressTypes preferidos para usar en las conexiones de kubelet.
+kubelet_preferred_address_types: 'InternalDNS,InternalIP,Hostname,ExternalDNS,ExternalIP'
+
+## Args adicionales para los componentes de k8s que pasan por kubeadm
+kube_kubeadm_apiserver_extra_args: {}
+kube_kubeadm_controller_extra_args: {}
+kube_kubeadm_scheduler_extra_args: {}
+
+## Montajes de volumen de host de control plane adicional
+## Example:
+# apiserver_extra_volumes:
+#  - name: name
+#    hostPath: /host/path
+#    mountPath: /mount/path
+#    readOnly: true
+apiserver_extra_volumes: {}
+controller_manager_extra_volumes: {}
+scheduler_extra_volumes: {}
+
+## Cifrar datos secretos en reposo
+kube_encrypt_secret_data: false
+kube_encrypt_token: "{{ lookup('password', credentials_dir + '/kube_encrypt_token.creds length=32 chars=ascii_letters,digits') }}"
+# Debe ser: aescbc, secretbox o aesgcm
+kube_encryption_algorithm: "aescbc"
+# Qué recursos de Kubernetes cifrar
+kube_encryption_resources: [secrets]
+
+# Si no está vacío, utilizará esta cadena como identificación en lugar del hostname actual
+kube_override_hostname: >-
+  {{ inventory_hostname }}
+
+secrets_encryption_query: "resources[*].providers[0].{{kube_encryption_algorithm}}.keys[0].secret"
+
+## Admite la versión mínima de tls, valores posibles: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+# tls_min_version: ""
+
+## Soporta conjuntos de cifrado tls.
+# tls_cipher_suites:
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
+#   - TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+#   - TLS_ECDHE_RSA_WITH_RC4_128_SHA
+#   - TLS_RSA_WITH_3DES_EDE_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA
+#   - TLS_RSA_WITH_AES_128_CBC_SHA256
+#   - TLS_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_RSA_WITH_AES_256_CBC_SHA
+#   - TLS_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_RSA_WITH_RC4_128_SHA
+
+## Cantidad de tiempo para retener eventos.  (default 1h0m0s)
+event_ttl_duration: "1h0m0s"
+##  Forzar la regeneración de los certificados del control plane de Kubernetes sin necesidad de modificar la versión del clúster
+force_certificate_regeneration: false

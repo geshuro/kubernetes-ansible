@@ -1,0 +1,91 @@
+---
+- name: prep_download | Establezca algunos datos
+  set_fact:
+    download_force_cache: "{{ true if download_run_once else download_force_cache }}"
+  tags:
+    - facts
+
+- name: prep_download | En localhost, compruebe si es posible root sin contraseña
+  command: "true"
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  register: test_become
+  changed_when: false
+  ignore_errors: true
+  become: true
+  when:
+    - download_localhost
+  tags:
+    - localhost
+    - asserts
+
+- name: prep_download | En localhost, verifique si el usuario tiene acceso a Docker sin usar sudo
+  shell: "{{ image_info_command_on_localhost }}"
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  register: test_docker
+  changed_when: false
+  ignore_errors: true
+  become: false
+  when:
+    - download_localhost
+  tags:
+    - localhost
+    - asserts
+
+- name: prep_download | Analizar las salidas de los comandos anteriores
+  set_fact:
+    user_in_docker_group: "{{ not test_docker.failed }}"
+    user_can_become_root: "{{ not test_become.failed }}"
+  when:
+    - download_localhost
+  tags:
+    - localhost
+    - asserts
+
+- name: prep_download | Comprobar que el usuario local está en el grupo o puede convertirse en root
+  assert:
+    that: "user_in_docker_group or user_can_become_root"
+    msg: >-
+      Error: El usuario no está en el grupo de Docker y no puede convertirse en root. Cuando download_localhost es verdadero, se debe cumplir al menos una de estas dos condiciones.
+  when:
+    - download_localhost
+  tags:
+    - localhost
+    - asserts
+
+- name: prep_download | Registrar información de imágenes de docker
+  shell: "{{ image_info_command }}"
+  no_log: true
+  register: docker_images
+  failed_when: false
+  changed_when: false
+  check_mode: no
+  when: download_container
+
+- name: prep_download | Crear directorio de embarco en el nodo remoto
+  file:
+    path: "{{ local_release_dir }}/images"
+    state: directory
+    recurse: yes
+    mode: 0755
+    owner: "{{ ansible_ssh_user | default(ansible_user_id) }}"
+
+
+- name: prep_download | Crear caché local para archivos e imágenes en el nodo de control
+  file:
+    path: "{{ download_cache_dir }}/images"
+    state: directory
+    recurse: yes
+    mode: 0755
+  delegate_to: localhost
+  connection: local
+  delegate_facts: no
+  run_once: true
+  become: false
+  when:
+    - download_force_cache
+  tags:
+    - localhost

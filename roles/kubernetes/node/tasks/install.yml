@@ -1,0 +1,47 @@
+---
+- name: Instalar | Copiar el binario de kubeadm desde el directorio de descargas
+  synchronize:
+    src: "{{ local_release_dir }}/kubeadm-{{ kubeadm_version }}-{{ image_arch }}"
+    dest: "{{ bin_dir }}/kubeadm"
+    compress: no
+    perms: yes
+    owner: no
+    group: no
+  delegate_to: "{{ inventory_hostname }}"
+  tags:
+    - kubeadm
+  when:
+    - not inventory_hostname in groups['kube-master']
+
+- name: Instalar | Establecer permisos a binarios de kubeadm
+  file:
+    path: "{{ bin_dir }}/kubeadm"
+    mode: "0755"
+    state: file
+  tags:
+    - kubeadm
+  when:
+    - not inventory_hostname in groups['kube-master']
+
+- name: Instalar | Copiar el binario de kubelet desde el directorio de descargas
+  synchronize:
+    src: "{{ local_release_dir }}/kubelet-{{ kube_version }}-{{ image_arch }}"
+    dest: "{{ bin_dir }}/kubelet"
+    compress: no
+    perms: yes
+    owner: no
+    group: no
+  delegate_to: "{{ inventory_hostname }}"
+  tags:
+    - kubelet
+    - upgrade
+  notify: Node | restart kubelet
+
+- name: Instalar | Establecer permisos a binarios de kubelet
+  file:
+    path: "{{ bin_dir }}/kubelet"
+    mode: "0755"
+    state: file
+  tags:
+    - kubelet
+    - upgrade

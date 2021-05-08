@@ -1,0 +1,24 @@
+---
+- name: Configurar valores predeterminados
+  debug:
+    msg: "Check roles/ansiblerole-defaults/defaults/main.yml"
+  tags:
+    - always
+
+# No ejecutar la recopilacion de hechos cuando arranque el so en roles
+- name: Establecer base de Ips de respaldo (fallback_ips_base)
+  import_tasks: fallback_ips.yml
+  when:
+    - "'bootstrap-os' not in ansible_play_role_names"
+    - fallback_ips is not defined
+  tags:
+    - always
+
+- name: Establecer no_proxy
+  import_tasks: no_proxy.yml
+  when:
+    - "'bootstrap-os' not in ansible_play_role_names"
+    - http_proxy is defined or https_proxy is defined
+    - no_proxy is not defined
+  tags:
+    - always

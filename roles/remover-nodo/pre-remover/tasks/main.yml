@@ -1,0 +1,27 @@
+---
+- name: remover-nodo | Lista de nodos
+  command: >-
+    {{ bin_dir }}/kubectl get nodes -o go-template={% raw %}'{{ range .items }}{{ .metadata.name }}{{ "\n" }}{{ end }}'{% endraw %}
+  register: nodos
+  delegate_to: "{{ groups['kube-master']|first }}"
+  changed_when: false
+  run_once: true
+
+- name: remover-nodo | Vaciar nodo excepto daemonsets
+  command: >-
+    {{ bin_dir }}/kubectl --kubeconfig /etc/kubernetes/admin.conf drain
+      --force
+      --ignore-daemonsets
+      --grace-period {{ drain_grace_period }}
+      --timeout {{ drain_timeout }}
+      --delete-local-data {{ hostvars[item]['kube_override_hostname']|default(item) }}
+  loop: "{{ nodo.split(',') | default(groups['kube-node']) }}"
+  # ignorar los servidores que no son nodos
+  when: hostvars[item]['kube_override_hostname']|default(item) in nodos.stdout_lines
+  register: result
+  failed_when: result.rc != 0 and not allow_ungraceful_removal
+  delegate_to: "{{ groups['kube-master']|first }}"
+  run_once: true
+  until: result.rc == 0 or allow_ungraceful_removal
+  retries: "{{ drain_retries }}"
+  delay: "{{ drain_retry_delay_seconds }}"

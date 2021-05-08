@@ -1,0 +1,35 @@
+---
+## Directorio donde se almacenan los datos etcd
+etcd_data_dir: /var/lib/etcd
+
+## Modo de implementación experimental de kubeadm etcd. Disponible solo para nuevas implementaciones
+etcd_kubeadm_enabled: false
+
+## Directorio donde se instalarán los binarios
+bin_dir: /usr/local/bin
+
+## Internal loadbalancers para API server
+loadbalancer_apiserver_localhost: true
+loadbalancer_apiserver_type: nginx
+
+## Local loadbalancer debe usar este puerto
+loadbalancer_apiserver_port: 6443
+
+## Si la variable loadbalancer_apiserver_healthcheck_port está definida, habilita la verificación de la vida útil del proxy para nginx.
+loadbalancer_apiserver_healthcheck_port: 8081
+
+## Configure estos valores de proxy
+#proxy_hostname: "10.20.20.66"
+##proxy_port: "3128"
+#http_proxy: "http://{{ proxy_hostname }}:{{ proxy_port }}"
+#https_proxy: "http://{{ proxy_hostname }}:{{ proxy_port }}"
+
+no_proxy_exclude_workers: false
+
+any_errors_fatal: true
+
+## Directorio donde se exportara los certificados de los usuarios del K8s
+dir_cert: /home/admcuc/kubernetes/cert
+dir_cert_cloud: "{{ dir_cert }}/cloud"
+dir_cert_devops: "{{ dir_cert }}/devops"
+dir_cert_develop: "{{ dir_cert }}/develop"

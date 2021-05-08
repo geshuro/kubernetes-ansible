@@ -1,0 +1,71 @@
+---
+- name: Establecer kubeadm_discovery_address
+  set_fact:
+    kubeadm_discovery_address: >-
+      {%- if "127.0.0.1" in kube_apiserver_endpoint or "localhost" in kube_apiserver_endpoint -%}
+      {{ first_kube_master }}:{{ kube_apiserver_port }}
+      {%- else -%}
+      {{ kube_apiserver_endpoint | regex_replace('https://', '') }}
+      {%- endif %}
+  tags:
+    - facts
+
+- name: Cargar certificados para que estén actualizados y no caducados
+  command: >-
+    {{ bin_dir }}/kubeadm init phase
+    --config {{ kube_config_dir }}/kubeadm-config.yaml
+    upload-certs
+    --upload-certs
+  register: kubeadm_upload_cert
+  when:
+    - inventory_hostname == groups['kube-master']|first
+
+- name: Analizar la clave del certificado si no está configurada
+  set_fact:
+    kubeadm_certificate_key: "{{ hostvars[groups['kube-master'][0]]['kubeadm_upload_cert'].stdout_lines[-1] | trim }}"
+  run_once: yes
+  when:
+    - hostvars[groups['kube-master'][0]]['kubeadm_upload_cert'] is defined
+    - hostvars[groups['kube-master'][0]]['kubeadm_upload_cert'] is not skipped
+
+- name: Crear la configuración de kubeadm ControlPlane
+  template:
+    src: "kubeadm-controlplane.{{ kubeadmConfig_api_version }}.yaml.j2"
+    dest: "{{ kube_config_dir }}/kubeadm-controlplane.yaml"
+    mode: 0640
+    backup: yes
+  when:
+    - inventory_hostname != groups['kube-master']|first
+    - not kubeadm_already_run.stat.exists
+
+- name: Espere a apiserver k8s
+  wait_for:
+    host: "{{ kubeadm_discovery_address.split(':')[0] }}"
+    port: "{{ kubeadm_discovery_address.split(':')[1] }}"
+    timeout: 180
+
+
+- name: Comprobar ya se ha ejecutado
+  debug:
+    msg: "{{ kubeadm_already_run.stat.exists }}"
+
+- name: Unir el nodo de ControlPlane al clúster
+  shell: >-
+    if [ -f /etc/kubernetes/manifests/kube-apiserver.yaml ]; then
+    {{ bin_dir }}/kubeadm reset -f --cert-dir {{ kube_cert_dir }};
+    fi &&
+    {{ bin_dir }}/kubeadm join
+    --config {{ kube_config_dir }}/kubeadm-controlplane.yaml
+    --ignore-preflight-errors=all
+  register: kubeadm_join_control_plane
+  retries: 3
+  until: kubeadm_join_control_plane is succeeded
+  when:
+    - inventory_hostname != groups['kube-master']|first
+    - kubeadm_already_run is not defined or not kubeadm_already_run.stat.exists
+  environment:
+    PATH: "{{ bin_dir }}:{{ ansible_env.PATH }}"
+
+- name: Establecer secret_changed en false para evitar una rotación de token adicional
+  set_fact:
+    secret_changed: false

@@ -1,0 +1,30 @@
+---
+- name: haproxy | Limpieza potencial de despliegue haproxy
+  file:
+    path: "{{ kube_manifest_dir }}/haproxy.yml"
+    state: absent
+
+- name: nginx-proxy | Crear directorio nginx
+  file:
+    path: "{{ nginx_config_dir }}"
+    state: directory
+    mode: 0700
+    owner: root
+
+- name: nginx-proxy | Escribir la configuración del nginx-proxy
+  template:
+    src: "loadbalancer/nginx.conf.j2"
+    dest: "{{ nginx_config_dir }}/nginx.conf"
+    owner: root
+    mode: 0755
+    backup: yes
+
+- name: nginx-proxy | Obtener checksum de la configuración
+  stat:
+    path: "{{ nginx_config_dir }}/nginx.conf"
+  register: nginx_stat
+
+- name: nginx-proxy | Escribir pod estático
+  template:
+    src: manifests/nginx-proxy.manifest.j2
+    dest: "{{ kube_manifest_dir }}/nginx-proxy.yml"

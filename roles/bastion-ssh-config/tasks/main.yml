@@ -1,0 +1,20 @@
+---
+- name: Establecer IP de host bastión
+  set_fact:
+    bastion_ip: "{{ hostvars[groups['bastion'][0]]['ansible_host'] | d(hostvars[groups['bastion'][0]]['ansible_ssh_host']) }}"
+  delegate_to: localhost
+  connection: local
+
+# Como en realidad estamos ejecutando en localhost, ansible_ssh_user es su usuario local cuando intenta usarlo directamente
+# Para descubrir el usuario ssh real, delegamos esta tarea en el bastión y almacenamos ansible_user en real_user
+- name: Almacenar el ansible_user actual en el real_user fact
+  set_fact:
+    real_user: "{{ ansible_user }}"
+
+- name: Crear ssh conf de bastion
+  become: false
+  delegate_to: localhost
+  connection: local
+  template:
+    src: ssh-bastion.conf
+    dest: "{{ playbook_dir }}/ssh-bastion.conf"

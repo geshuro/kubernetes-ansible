@@ -1,0 +1,33 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: autorizar-{{ autorizar_grupo_usr }}-cr
+  namespace: {{ autorizar_namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["deployments"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["daemonsets"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["replicasets"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]    
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ['*']

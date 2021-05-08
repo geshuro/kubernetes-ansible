@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ networkpolicies.ingress.allow_all_trafico_otros_ns_a_pod.namespace }}
+  name: "{{ networkpolicies.ingress.allow_all_trafico_otros_ns_a_pod.name }}-allow-all-namespaces"
+spec:
+  podSelector:
+    matchLabels:
+      {{ networkpolicies.ingress.allow_all_trafico_otros_ns_a_pod.pod_matchlabels | to_nice_yaml(indent=2) | trim | indent(width=6) }}
+  ingress:
+  - from:
+    - namespaceSelector: {}

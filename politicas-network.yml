@@ -1,0 +1,130 @@
+---
+- name: Verificar la versión de Ansible
+  import_playbook: ansible_version.yml
+
+- hosts: bastion[0]
+  gather_facts: False
+  roles:
+    - { role: bastion-ssh-config, tags: ["localhost", "bastion"] }
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_networkpolicies
+      tags: cluster_networkpolicies
+      vars:
+        networkpolicies:
+          ingress:
+            enabled: false
+            deny_all_trafico: #Denegar todo el tráfico a una aplicación
+              enabled: true
+              namespace: "microservicios"
+              nombre: "nombrellabelpodx-deny-all"
+              pod_matchlabels:
+                app: web
+            limit_all_trafico: #Limitar el tráfico a una aplicación
+              enabled: true
+              namespace: "microservicios"
+              nombre: "nombrellabelpodx-allow"
+              pod_matchlabels:
+                app: bookstore
+                role: api
+              from_pod_matchlabels:
+                app: bookstore
+            allow_all_trafico: #Permitir todo el tráfico a una aplicación
+              enabled: true
+              namespace: "default"
+              nombre: "nombrellabelpodx-allow-all"
+              pod_matchlabels:
+                app: web
+            deny_all_trafico_en_ns: #Denegar todo el tráfico entre pods de un mismo namespace y otros
+              enabled: true
+              namespace: "default"
+            deny_all_trafico_otros_ns: #Denegar todo el tráfico de otros namespace
+              enabled: true
+              namespace: "default"
+            allow_all_trafico_otros_ns_a_pod: #Permitir todo el tráfico desde todos los namespace hacia una aplicacion
+              enabled: true
+              namespace: "default"
+              nombre: "default"
+              pod_matchlabels:
+                app: web
+            allow_trafico_from_a_ns_a_pod: #Permitir todo el tráfico de ciertos namespaces hacia una aplicacion de un namespace
+              enabled: true
+              namespace: "default"
+              nombre: "default"
+              pod_matchlabels:
+                app: web
+              ns_matchlabels:
+                labelns: produccion
+            allow_trafico_algunos_ns_a_app: #Permitir el tráfico de algunos pods en otros namespaces hacia pods de un namespace
+              enabled: true
+              namespace: "default"
+              nombre: "default"
+              pod_matchlabels:
+                app: web
+              ns_matchlabels:
+                labelns: produccion
+              from_pod_matchlabels:
+                app: monitoreo
+            allow_trafico_solo_un_puerto_app: #Permitir el tráfico de una aplicacion mediante un puerto
+              enabled: true
+              namespace: "default"
+              nombre: "app-allow-port"
+              nro_puerto: 6000
+              pod_matchlabels:
+                app: web
+              from_pod_matchlabels:
+                app: prometheus
+            allow_trafico_con_multiple_selectors_app: #Permitir el tráfico de una aplicacion mediante multiple selectores
+              enabled: true
+              namespace: "default"
+              nombre: "app-allow-servicios"
+              pod_matchlabels:
+                app: bookstore
+                role: db
+              from_pod_matchlabels:
+                - podSelector:
+                    matchLabels:
+                      app: bookstore
+                      role: search
+                - podSelector:
+                    matchLabels:
+                      app: bookstore
+                      role: api
+                - podSelector:
+                    matchLabels:
+                      app: inventory
+                      role: web
+      when: "networkpolicies.ingress.enabled|default(false)"
+
+- hosts: kube-master[0]
+  gather_facts: False
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - role: kubernetes-apps/cluster_networkpolicies
+      tags: cluster_networkpolicies
+      vars:
+        networkpolicies:
+          egress:
+            enabled: true
+            deny_all_trafico_app: #Denegar tráfico de salida de una aplicación
+              enabled: true
+              namespace: "default"
+              nombre: "nombrellabelpodx-deny-egress"
+              pod_matchlabels:
+                app: web
+            deny_all_trafico_ns: #Denegar todo el tráfico no incluido en la lista blanca de un namespace
+              enabled: true
+              namespace: "default"
+            deny_all_menos_dns_trafico_ns: #Denegar todo el tráfico menos DNS no incluido en la lista blanca de un namespace
+              enabled: true
+              namespace: "default"
+            deny_all_trafico_external: #Denegar todo el tráfico de salida externo
+              enabled: true
+              namespace: "default"
+              nombre: "nombrellabelpodx-external-egress"
+              pod_matchlabels:
+                app: web
+      when: "networkpolicies.egress.enabled|default(false)"

@@ -1,0 +1,11 @@
+---
+- name: Calico-rr | Pre-upgrade tareas
+  include_tasks: pre.yml
+
+- name: Calico-rr | Configurar tareas de nodo
+  include_tasks: update-node.yml
+
+- name: Calico-rr | Establecer etiqueta para route reflector
+  command: >-
+    {{ bin_dir }}/calicoctl.sh label node {{ inventory_hostname }}
+    'i-am-a-route-reflector=true' --overwrite

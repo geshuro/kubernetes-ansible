@@ -1,0 +1,66 @@
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_become: true
+    ansible_ssh_private_key_file: /tmp/kp/kp-tec-devops-test2.pem
+  hosts:
+    master1:
+      ip: 172.28.12.143
+      access_ip: 172.28.12.143
+      ansible_host: 172.28.12.143
+    master2:
+      ip: 172.28.12.104
+      access_ip: 172.28.12.104
+      ansible_host: 172.28.12.104
+    master3:
+      ip: 172.28.12.48
+      access_ip: 172.28.12.48
+      ansible_host: 172.28.12.48
+    tools1:
+      ip: 172.28.12.218
+      access_ip: 172.28.12.218
+      ansible_host: 172.28.12.218
+      node_labels:
+        node-role.kubernetes.io/node-tools: ""
+    tools2:
+      ip: 172.28.12.93
+      access_ip: 172.28.12.93
+      ansible_host: 172.28.12.93
+      node_labels:
+        node-role.kubernetes.io/node-tools: ""
+    tools3:
+      ip: 172.28.12.49
+      access_ip: 172.28.12.49
+      ansible_host: 172.28.12.49
+      node_labels:
+        node-role.kubernetes.io/node-tools: ""
+    nfs1:
+      ip: 172.28.12.240
+      access_ip: 172.28.12.240
+      ansible_host: 172.28.12.240
+  children:
+    kube-master:
+      hosts:
+        master1:
+        master2:
+        master3:
+    etcd:
+      hosts:
+        master1:
+        master2:
+        master3:
+    kube-node:
+      hosts:
+        tools1:
+        tools2:
+        tools3:
+    k8s-cluster:
+      children:
+        kube-master:
+        kube-node:
+    nfs:
+      hosts:
+        nfs1:
+    calico-rr:
+      hosts: {}

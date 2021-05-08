@@ -1,0 +1,163 @@
+---
+- name: Comprobar si se inicia con ostree
+  stat:
+    path: /run/ostree-booted
+  register: ostree
+
+- name: Establecer is_fedora_coreos
+  lineinfile:
+    path: /etc/os-release
+    line: "VARIANT_ID=coreos"
+    state: present
+  check_mode: yes
+  register: os_variant_coreos
+  changed_when: false
+
+- name: Establecer is_fedora_coreos
+  set_fact:
+    is_fedora_coreos: "{{ ostree.stat.exists and os_variant_coreos is not changed }}"
+
+- name: check resolvconf
+  command: which resolvconf
+  register: resolvconf
+  failed_when: false
+  changed_when: false
+  check_mode: no
+
+- name: Comprobar resolvconf
+  command: which resolvconf
+  register: resolvconf
+  failed_when: false
+  changed_when: false
+  check_mode: no
+
+- name: Comprobar systemd-resolved
+  command: systemctl is-active systemd-resolved
+  register: systemd_resolved_enabled
+  failed_when: false
+  changed_when: false
+  check_mode: no
+
+- name: Establecer datos DNS
+  set_fact:
+    resolvconf: >-
+      {%- if resolvconf.rc == 0 -%}true{%- else -%}false{%- endif -%}
+    bogus_domains: |-
+      {% for d in [ 'default.svc.' + dns_domain, 'svc.' + dns_domain ] + searchdomains|default([]) -%}
+      {{ dns_domain }}.{{ d }}./{{ d }}.{{ d }}./com.{{ d }}./
+      {%- endfor %}
+        []
+
+- name: Comprobar si kubelet está configurado
+  stat:
+    path: "{{ kube_config_dir }}/kubelet.env"
+  register: kubelet_configured
+  changed_when: false
+
+- name: Comprobar si la etapa de configuración temprana de DNS 
+  set_fact:
+    dns_early: >-
+      {%- if kubelet_configured.stat.exists -%}false{%- else -%}true{%- endif -%}
+
+- name: Archivos de destino resolv.conf
+  set_fact:
+    resolvconffile: /etc/resolv.conf
+    base: >-
+      {%- if resolvconf|bool -%}/etc/resolvconf/resolv.conf.d/base{%- endif -%}
+    head: >-
+      {%- if resolvconf|bool -%}/etc/resolvconf/resolv.conf.d/head{%- endif -%}
+  when: not is_fedora_coreos
+
+- name: Comprobar si existe /etc/dhclient.conf
+  stat:
+    path: /etc/dhclient.conf
+  register: dhclient_stat
+
+- name: Archivo de configuración dhclient de destino para /etc/dhclient.conf
+  set_fact:
+    dhclientconffile: /etc/dhclient.conf
+  when: dhclient_stat.stat.exists
+
+- name: Comprobar si existe /etc/dhcp/dhclient.conf
+  stat:
+    path: /etc/dhcp/dhclient.conf
+  register: dhcp_dhclient_stat
+
+- name: Archivo de configuración dhclient de destino para /etc/dhcp/dhclient.conf
+  set_fact:
+    dhclientconffile: /etc/dhcp/dhclient.conf
+  when: dhcp_dhclient_stat.stat.exists
+
+- name: Archivo de enlace dhclient de destino para la familia Red Hat
+  set_fact:
+    dhclienthookfile: /etc/dhcp/dhclient.d/zdnsupdate.sh
+  when: ansible_os_family == "RedHat"
+
+- name: Archivo de enlace dhclient de destino para la familia Debian
+  set_fact:
+    dhclienthookfile: /etc/dhcp/dhclient-exit-hooks.d/zdnsupdate
+  when: ansible_os_family == "Debian"
+
+- name: Generar dominios de búsqueda para resolvconf
+  set_fact:
+    searchentries:
+      search {{ ([ 'default.svc.' + dns_domain, 'svc.' + dns_domain ] + searchdomains|default([])) | join(' ') }}
+    domainentry:
+      domain {{ dns_domain }}
+    supersede_search:
+      supersede domain-search "{{ ([ 'default.svc.' + dns_domain, 'svc.' + dns_domain ] + searchdomains|default([])) | join('", "') }}";
+    supersede_domain:
+      supersede domain-name "{{ dns_domain }}";
+
+- name: Elija la IP del clúster de Coredns o el resolutor predeterminado
+  set_fact:
+    coredns_server: |-
+      {%- if dns_mode == 'coredns' and not dns_early|bool -%}
+        {{ [ skydns_server ] }}
+      {%- elif dns_mode == 'coredns_dual' and not dns_early|bool -%}
+        {{ [ skydns_server ] + [ skydns_server_secondary ] }}
+      {%- elif dns_mode == 'manual' and not dns_early|bool -%}
+        {{ ( manual_dns_server.split(',') | list) }}
+      {%- elif dns_early|bool -%}
+        {{ upstream_dns_servers|default([]) }}
+      {%- endif -%}
+
+- name: Generar nameservers para resolvconf
+  set_fact:
+    nameserverentries:
+      nameserver {{ ( coredns_server + nameservers|d([]) + cloud_resolver|d([])) | unique | join(',nameserver ') }}
+    supersede_nameserver:
+      supersede domain-name-servers {{ ( coredns_server + nameservers|d([]) + cloud_resolver|d([])) | unique | join(', ') }};
+
+- name: Recopilar variables específicas del sistema operativo
+  include_vars: "{{ item }}"
+  with_first_found:
+    - files:
+        - "{{ ansible_distribution|lower }}-{{ ansible_distribution_version|lower|replace('/', '_') }}.yml"
+        - "{{ ansible_distribution|lower }}-{{ ansible_distribution_release }}.yml"
+        - "{{ ansible_distribution|lower }}-{{ ansible_distribution_major_version|lower|replace('/', '_') }}.yml"
+        - "{{ ansible_distribution|lower }}.yml"
+        - "{{ ansible_os_family|lower }}.yml"
+        - defaults.yml
+      paths:
+        - ../vars
+      skip: true
+
+- name: Establecer variables etcd si usa el modo kubeadm
+  set_fact:
+    etcd_cert_dir: "{{ kube_cert_dir }}"
+    kube_etcd_cacert_file: "etcd/ca.crt"
+    kube_etcd_cert_file: "apiserver-etcd-client.crt"
+    kube_etcd_key_file: "apiserver-etcd-client.key"
+  when:
+    - etcd_kubeadm_enabled
+
+- name: Comprobar solo lectura de carpeta /usr
+  stat:
+    path: "/usr"
+  register: usr
+
+- name: Establecer ruta alternativa de flexvolume
+  set_fact:
+    kubelet_flexvolumes_plugins_dir: /var/lib/kubelet/volumeplugins
+  when: not usr.stat.writeable

@@ -1,0 +1,63 @@
+---
+- name: Instalar paquetes nfs server
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+      - nfs-utils
+
+- name: Habilitar servicio rpcbind
+  service:
+    name: rpcbind
+    enabled: yes
+
+- name: Iniciar servicio rpcbind
+  service:
+    name: rpcbind
+    state: started
+
+- name: Crear carpeta /shared sino existe
+  file:
+    path: /shared
+    state: directory
+    mode: '0777'
+
+- name: Crear carpeta {{ dir_disk1 }} con permisos
+  file:
+    path: '{{ dir_disk1 }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '777'
+  when:
+    - nfs_cliente_disk1
+
+- name: Crear carpeta {{ dir_tools }}  con permisos
+  file:
+    path: '{{ dir_tools }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '777'
+  when:
+    - nfs_cliente_tools
+
+- name: Montar {{ dir_disk1 }}
+  mount:
+    path: '{{ dir_disk1 }}'
+    src: '{{ ip_nfs_server }}:{{ dir_disk1 }}'
+    fstype: nfs
+    opts: rw,sync,hard,intr
+    state: mounted
+  when:
+    - nfs_cliente_disk1
+
+- name: Montar {{ dir_tools }}
+  mount:
+    path: '{{ dir_tools }}'
+    src: '{{ ip_nfs_server }}:{{ dir_tools }}'
+    fstype: nfs
+    opts: rw,sync,hard,intr
+    state: mounted
+  when:
+    - nfs_cliente_tools

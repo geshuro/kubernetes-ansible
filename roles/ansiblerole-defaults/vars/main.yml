@@ -1,0 +1,5 @@
+---
+kube_proxy_deployed: "{{ 'addon/kube-proxy' not in kubeadm_init_phases_skip }}"
+
+# La versión más baja permitida para actualizar (igual que calico_version en la rama anterior)
+calico_min_version_required: "v3.15.2"

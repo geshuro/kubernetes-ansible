@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "{{ networkpolicies.egress.deny_all_trafico_ns.namespace }}-deny-all-egress"
+  namespace: {{ networkpolicies.egress.deny_all_trafico_ns.namespace }}
+spec:
+  policyTypes:
+  - Egress
+  podSelector: {}
+  egress: []

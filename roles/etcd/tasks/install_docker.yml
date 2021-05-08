@@ -1,0 +1,21 @@
+---
+- import_tasks: install_etcdctl_docker.yml
+  when: etcd_cluster_setup
+
+- name: Instalar el script de inicio de etcd
+  template:
+    src: etcd.j2
+    dest: "{{ bin_dir }}/etcd"
+    owner: 'root'
+    mode: 0750
+    backup: yes
+  when: etcd_cluster_setup
+
+- name: Instalar el script de inicio de etcd-events
+  template:
+    src: etcd-events.j2
+    dest: "{{ bin_dir }}/etcd-events"
+    owner: 'root'
+    mode: 0750
+    backup: yes
+  when: etcd_events_cluster_setup

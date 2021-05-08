@@ -1,0 +1,16 @@
+---
+- name: Eliminar la configuración específica del ansiblerol de la configuración de dhclient
+  blockinfile:
+    path: "{{ dhclientconffile }}"
+    state: absent
+    backup: yes
+    marker: "# Ansible entries {mark}"
+  when: dhclientconffile is defined
+  notify: Preinstall | propagar resolvconf a componentes k8s
+
+- name: Eliminar el hook de dhclient específico de ansiblerol
+  file:
+    path: "{{ dhclienthookfile }}"
+    state: absent
+  when: dhclienthookfile is defined
+  notify: Preinstall | propagar resolvconf a componentes k8s

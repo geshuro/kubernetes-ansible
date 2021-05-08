@@ -1,0 +1,15 @@
+---
+- name: Calico-rr | Deshabilitar el servicio calico-rr si existe
+  service:
+    name: calico-rr
+    state: stopped
+    enabled: no
+  failed_when: false
+
+- name: Calico-rr | Eliminar archivos obsoletos
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/calico/calico-rr.env
+    - /etc/systemd/system/calico-rr.service
