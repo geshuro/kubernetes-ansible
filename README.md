@@ -18,7 +18,7 @@ sudo subscription-manager register --username XXXXX --password YYYYYY --auto-att
 - El Bastion Ansible instalar estas librerias Python "requisitos.txt"
 
 ```raw
-sudo pip3 install -r requisitos.txt --proxy=http://192.168.66.118:3128
+sudo pip3 install -r requisitos.txt --proxy=http://{hostname-ip}:{port}
 ```
 - Configurar cluster
 
